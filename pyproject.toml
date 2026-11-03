@@ -1,0 +1,48 @@
+[project]
+name = "fibre-analysis"
+version = "0.1.0"
+description = "Analysis scripts for the Part II fibre interferometer practical"
+readme = "README.md"
+authors = [
+    { name = "Alex Quarry", email = "alexanderquarry@tutanota.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.4",
+    "scipy>=1.18.1",
+]
+
+[project.scripts]
+fibre-contrast = "fibre_analysis.contrast:main"
+fibre-scan = "fibre_analysis.scan:main"
+fibre-envelope = "fibre_analysis.envelope:main"
+fibre-calibrate = "fibre_analysis.calibrate:main"
+fibre-power = "fibre_analysis.power:main"
+fibre-vibro = "fibre_analysis.vibrometer:main"
+fibre-synth = "fibre_analysis.synth:main"
+fibre-capture = "fibre_analysis.capture:main"
+
+[project.optional-dependencies]
+pico = [
+    "picosdk>=1.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # allow µ, λ, Δ etc. in text
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

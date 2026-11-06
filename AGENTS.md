@@ -2,6 +2,12 @@
 
 Guidance for AI coding agents working in this repository.
 
+There are two users doing this lab, one (Alex) is primarily responsible for developing and using the software,
+the other (Jiahui) uses the software when Alex isn't there. The two users can be distinguished easily because
+Alex is running a Debian Linux Machine whilst Jiahui is not.
+
+The rest of this file primarily concerns Alex but may have applications with Jiahui.
+
 ## What this is
 
 Acquisition and analysis scripts for a Part II physics practical: a fibre

@@ -34,6 +34,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.ndimage import uniform_filter1d
 
+from .io import utf8_output
+
 
 @dataclass
 class ContrastResult:
@@ -165,6 +167,7 @@ def expected_max_contrast(i1: float, i2: float) -> float:
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     import argparse
 
     from .io import load_trace

@@ -58,14 +58,14 @@ def test_io_roundtrip_and_picoscope_units(tmp_path):
     assert np.allclose(tr.t, t)
     assert np.allclose(tr.channel("B"), np.cos(t))
 
-    (tmp_path / "b.csv").write_text("Time,Channel A\n(us),(mV)\n\n0,100\n1,∞\n2,300\n")
+    (tmp_path / "b.csv").write_text("Time,Channel A\n(us),(mV)\n\n0,100\n1,∞\n2,300\n", encoding="utf-8")
     with pytest.warns(UserWarning, match="over-range"):
         tr = io.load_trace(tmp_path / "b.csv")
     assert tr.dt == pytest.approx(1e-6)
     assert tr.channel()[0] == pytest.approx(0.1)
     assert np.isnan(tr.channel()[1])
 
-    (tmp_path / "c.csv").write_text("Time (ms),Channel A (mV)\n0,100\n1,200\n")
+    (tmp_path / "c.csv").write_text("Time (ms),Channel A (mV)\n0,100\n1,200\n", encoding="utf-8")
     tr = io.load_trace(tmp_path / "c.csv")
     assert tr.dt == pytest.approx(1e-3)
     assert tr.channel("A")[1] == pytest.approx(0.2)
@@ -240,7 +240,7 @@ def test_data_folder(tmp_path, monkeypatch):
     assert io.data_path("x.csv") == Path("data/x.csv")
     assert (tmp_path / "data").is_dir()
     assert io.data_path("sub/x.csv") == Path("sub/x.csv")
-    (tmp_path / "data" / "y.csv").write_text("t,v\n0,1\n1,2\n")
+    (tmp_path / "data" / "y.csv").write_text("t,v\n0,1\n1,2\n", encoding="utf-8")
     assert io.find_data("y.csv") == Path("data/y.csv")
     assert io.load_trace("y.csv").channel()[1] == 2
     assert io.graph_path("data/y.csv", ".png") == Path("output/y.png")
@@ -294,9 +294,37 @@ def test_rescan_writes_new_file_and_keeps_original(demo, tmp_path, monkeypatch):
 
     monkeypatch.chdir(tmp_path)
     shutil.copy(demo / "fp_scan.csv", tmp_path / "fp.csv")
-    before = (tmp_path / "fp.csv").read_text()
+    before = (tmp_path / "fp.csv").read_text(encoding="utf-8")
     scan.rescan_main([str(tmp_path / "fp.csv"), "--dark", str(synth.DARK)])
-    assert (tmp_path / "fp.csv").read_text() == before
+    assert (tmp_path / "fp.csv").read_text(encoding="utf-8") == before
     new = load_scan(tmp_path / "fp_period.csv")
     old = load_scan(tmp_path / "fp.csv")
     assert np.allclose(new.contrast, old.contrast, atol=0.02)
+
+
+def test_decimal_comma_export(tmp_path):
+    # European-locale PicoScope export: ";" separators, "," decimals.
+    (tmp_path / "eu.csv").write_text("Time;Channel A\n(ms);(V)\n\n0,000;0,512\n0,010;1,25\n", encoding="utf-8")
+    tr = io.load_trace(tmp_path / "eu.csv")
+    assert tr.dt == pytest.approx(1e-5)
+    assert tr.channel("A")[1] == pytest.approx(1.25)
+
+
+def test_output_survives_a_non_utf8_pipe():
+    # Windows uses a legacy encoding when output is redirected; printing µ/λ must not crash.
+    import io as pyio
+    import sys
+
+    raw = pyio.BytesIO()
+    pipe = pyio.TextIOWrapper(raw, encoding="cp1252")
+    old = sys.stdout
+    sys.stdout = pipe
+    try:
+        io.utf8_output()
+        print("λ µ Δ π ±")
+        pipe.flush()
+        written = raw.getvalue()
+    finally:
+        sys.stdout = old
+        pipe.detach()
+    assert written.decode("utf-8").strip() == "λ µ Δ π ±"

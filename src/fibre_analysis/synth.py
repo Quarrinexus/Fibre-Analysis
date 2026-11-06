@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from . import setup_a
-from .io import save_trace
+from .io import save_trace, utf8_output
 
 C_LIGHT = 299_792_458.0
 LAMBDA0 = setup_a.FP_CENTRE_NM * 1e-9
@@ -148,6 +148,7 @@ def _scan(folder: Path, name: str, positions_div: np.ndarray, nu, s, arms, lambd
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("out", nargs="?", default="demo")
     p.add_argument("--seed", type=int, default=1)

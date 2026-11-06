@@ -30,7 +30,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .io import Trace, data_path, save_trace
+from .io import Trace, data_path, save_trace, utf8_output
 
 FAMILIES = ("ps2000a", "ps3000a", "ps4000a", "ps5000a", "ps2000")
 CHANNELS = "ABCDEFGH"
@@ -330,6 +330,7 @@ def autorange_capture(
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("out", help="CSV file to write")
     p.add_argument("--channels", nargs="+", default=["A", "B"])

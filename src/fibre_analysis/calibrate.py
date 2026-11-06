@@ -23,7 +23,7 @@ from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
 
 from . import setup_a
-from .io import load_trace
+from .io import load_trace, utf8_output
 
 
 @dataclass
@@ -116,6 +116,7 @@ def calibrate(signal: np.ndarray, drive: np.ndarray, fs: float, wavelength_nm: f
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("trace")
     p.add_argument("--signal", default="A", help="detector channel (default A)")

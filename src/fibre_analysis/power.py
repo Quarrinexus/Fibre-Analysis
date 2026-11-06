@@ -15,6 +15,7 @@ import argparse
 import numpy as np
 
 from .contrast import expected_max_contrast
+from .io import utf8_output
 
 RESPONSIVITY = 0.95  # A/W
 LOAD = 50.0  # ohm
@@ -42,6 +43,7 @@ def noise_figure_db(snr_in, snr_out):
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("volts", nargs="*", type=float, help="detector voltage(s)")
     p.add_argument("--dbm", type=float, nargs="*", help="power(s) in dBm")

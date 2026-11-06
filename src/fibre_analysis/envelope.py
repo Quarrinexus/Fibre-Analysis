@@ -36,7 +36,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 from . import setup_a
-from .io import graph_path
+from .io import graph_path, utf8_output
 from .scan import load_scan
 
 C_LIGHT = 299_792_458.0
@@ -322,6 +322,7 @@ def spectrum_from_scan(opd_um: np.ndarray, c: np.ndarray, wavelength_nm: float =
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("scan", help="CSV written by fibre-scan")
     p.add_argument("--source", choices=["sld", "fp"], required=True)

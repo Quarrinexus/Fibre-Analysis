@@ -31,7 +31,7 @@ from pathlib import Path
 import numpy as np
 
 from .contrast import contrast, contrast_per_period
-from .io import Trace, data_path, find_data, graph_path, load_trace
+from .io import Trace, data_path, find_data, graph_path, load_trace, utf8_output
 
 COLUMNS = [
     "x", "unit", "contrast", "contrast_err", "n_periods", "contrast_whole", "contrast_rms",
@@ -59,7 +59,7 @@ class Scan:
 
 
 def load_scan(path: str | Path) -> Scan:
-    with find_data(path).open() as f:
+    with find_data(path).open(encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
     if not rows:
         raise ValueError(f"{path} has no data rows")
@@ -164,12 +164,12 @@ def _wait_for_new_csv(folder: Path, since: float, timeout: float = 600) -> Path 
 def _read_rows(out: Path) -> list[dict[str, str]]:
     if not out.exists():
         return []
-    with out.open() as f:
+    with out.open(encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
 def _write_rows(out: Path, rows: list[dict[str, str]]) -> None:
-    with out.open("w", newline="") as f:
+    with out.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=COLUMNS)
         w.writeheader()
         w.writerows(rows)
@@ -213,6 +213,7 @@ class PicoSource:
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", required=True, help="CSV file the scan is written to")
     p.add_argument("--watch", help="folder PicoScope saves CSVs into")
@@ -335,6 +336,7 @@ def rescan_main(argv: list[str] | None = None) -> None:
 
         uv run fibre-rescan fp_scan.csv            # writes data/fp_scan_period.csv
     """
+    utf8_output()
     p = argparse.ArgumentParser(description=rescan_main.__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("scan", help="existing scan CSV (rows must point to their trace files)")
     p.add_argument("--out", help="new scan CSV (default: <scan>_period.csv next to it)")

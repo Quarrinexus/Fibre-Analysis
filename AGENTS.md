@@ -65,6 +65,11 @@ before you call a change done.
 - **Test against known answers.** New analysis needs a test that recovers a known
   value from `synth` data shaped like the real setup (mV–V signals, noise, dark
   offset, non-integer fringes per sweep), not just a test that it runs.
+- **Cross-platform (Linux, Windows, macOS):** use `pathlib`; pass `encoding="utf-8"`
+  to every `open`/`read_text`/`write_text` (tests included); start every command's
+  `main` with `utf8_output()`. Check with
+  `PYTHONUTF8=0 PYTHONCOERCECLOCALE=0 LC_ALL=C uv run pytest`, which simulates
+  Windows' non-UTF-8 defaults.
 - `setup_a.py` values were read by eye off scanned plots (±10%). Use them as defaults
   and for comparison, never as measured results.
 - Be honest about uncertainty: if a method has a systematic error, say so in the

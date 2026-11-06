@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import csv
 import re
+import sys
 import warnings
 from dataclasses import dataclass, field
+from io import TextIOWrapper
 from pathlib import Path
 
 import numpy as np
@@ -78,6 +80,9 @@ def load_trace(path: str | Path) -> Trace:
     except csv.Error:
         delimiter = ","
     rows = [r for r in csv.reader(lines, delimiter=delimiter)]
+    if delimiter != ",":
+        # European-locale PicoScope exports: "0,512" with ";" separators.
+        rows = [[c.replace(",", ".") for c in r] for r in rows]
 
     names: list[str] | None = None
     units: list[str] | None = None
@@ -130,6 +135,17 @@ def load_trace(path: str | Path) -> Trace:
     return Trace(t=t, channels=channels, path=path)
 
 
+def utf8_output() -> None:
+    """Make printing µ, λ, Δ, π … safe on every OS. Windows otherwise uses a legacy
+    encoding when output is redirected to a file or pipe, and the print crashes."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, TextIOWrapper) and stream.encoding.lower().replace("-", "") != "utf8":
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
 DATA_DIR = Path("data")
 
 
@@ -166,7 +182,7 @@ def save_trace(path: str | Path, t: np.ndarray, channels: dict[str, np.ndarray])
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     names = list(channels)
-    with path.open("w", newline="") as f:
+    with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["Time", *names])
         w.writerow(["(ms)", *["(V)"] * len(names)])

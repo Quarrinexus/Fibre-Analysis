@@ -33,7 +33,7 @@ import numpy as np
 from scipy.signal import find_peaks
 
 from . import setup_a
-from .io import find_data, graph_path
+from .io import find_data, graph_path, utf8_output
 from .scan import load_scan
 
 
@@ -134,6 +134,7 @@ def datasheet_spectrum(source: str, lam_nm: np.ndarray) -> np.ndarray:
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("scan", help="CSV written by fibre-scan")
     p.add_argument("--source", choices=["sld", "fp"], required=True)
@@ -175,7 +176,7 @@ def main(argv: list[str] | None = None) -> None:
             print("Warning: scan too short to resolve the modes - scan over more revivals")
 
     stem = str(Path(a.scan).with_suffix(""))
-    with open(stem + "_spectrum.csv", "w", newline="") as f:
+    with open(stem + "_spectrum.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["wavelength_nm", "intensity"])
         for lam, i in zip(sp.wavelength_nm[view], sp.intensity[view], strict=True):

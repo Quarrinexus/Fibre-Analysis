@@ -4,12 +4,102 @@ Analysis scripts for the Part II fibre interferometer practical. Every command
 reads PicoScope CSV exports (time in s/ms/µs, volts in V/mV; "∞" over-range
 samples are flagged) or plain `t,v` CSVs.
 
+## Installation
+
+You need [uv](https://docs.astral.sh/uv/). It also installs the right Python (3.13+)
+for you, so nothing else is needed for analysis. Driving the scope directly needs
+Pico's drivers as well (step 4).
+
+**1. Install uv** (no admin rights needed):
+
 ```bash
-uv sync                    # install
-uv run fibre-synth demo    # make fake lab data to try everything on
-uv run pytest              # check the scripts recover known answers
-ruff check . && ruff format . && ty check
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
+
+On Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**2. Get the code:**
+
+```bash
+git clone https://github.com/Quarrinexus/fibre_analysis.git
+cd fibre_analysis
+```
+
+**3. Install the Python packages.** For analysis only:
+
+```bash
+uv sync
+```
+
+To also capture from the PicoScope (`--pico`, `fibre-capture`):
+
+```bash
+uv sync --extra pico
+```
+
+Once you've added `--extra pico`, keep using it: a later plain `uv sync` removes the
+Pico package again. `uv run …` never removes anything.
+
+**4. Install Pico's drivers** (only for `--pico` / `fibre-capture`). The Python
+package is only a wrapper; the drivers come from Pico Technology. The 2205A in this
+lab uses the `ps2000` driver.
+
+*Linux (Debian/Ubuntu):* add Pico's package repository, then install the driver:
+
+```bash
+wget -O- https://labs.picotech.com/Release.gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/picotech-archive-keyring.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/picotech-archive-keyring.gpg] https://labs.picotech.com/picoscope7/debian/ picoscope main" | sudo tee /etc/apt/sources.list.d/picoscope7.list
+sudo apt update
+sudo apt install libps2000
+```
+
+The package puts the library in `/opt/picoscope/lib`, registers that path, and adds a
+udev rule so you can use the scope without root. Unplug and replug the scope
+afterwards. Other models need their own package (`libps2000a`, `libps3000a`,
+`libps4000a`, `libps5000a`), or install `picoscope` (the app) to get them all.
+
+*Windows / macOS:* install the 64-bit **PicoSDK** from
+[picotech.com/downloads](https://www.picotech.com/downloads) (choose your scope model,
+then *Software development kit*). If a capture then says the driver isn't found, add
+the SDK's `lib` folder to `PATH` (Windows) or `DYLD_LIBRARY_PATH` (macOS).
+
+**5. Check it works.**
+
+```bash
+uv run pytest                 # all tests pass, no scope needed
+uv run fibre-synth demo       # fake lab data to try every command on
+uv run fibre-capture test.csv # with the scope plugged in and the PicoScope app closed
+```
+
+`fibre-capture` should print the scope family (`ps2000`) and the voltages it read.
+If it says *No PicoScope found*:
+
+- `driver not installed` means step 4 isn't done.
+- `no unit found` or `PICO_NOT_FOUND` means the scope is unplugged, or another
+  program (usually the PicoScope app) is using it.
+
+**For development**, also install the linter and type checker, then run all three
+checks before committing:
+
+```bash
+uv tool install ruff
+uv tool install ty
+```
+
+```bash
+uv run pytest && ruff check . && ruff format . && ty check
+```
+
+**Platforms.** Written to run on Linux, Windows and macOS: paths go through `pathlib`,
+files are read and written as UTF-8, output is forced to UTF-8 (so µ, λ, Δ print even
+when redirected on Windows), and European-locale PicoScope exports (`;` separators,
+`,` decimals) are read correctly. Tested on Linux, including a simulated non-UTF-8
+system; not yet run on real Windows or macOS machines. Scope capture there depends on
+PicoSDK for that OS (on Apple-silicon Macs, check Pico supports your model).
 
 ## Commands
 
@@ -73,11 +163,9 @@ slower motion but blurs the velocity changes in time.
 ## Direct PicoScope capture (optional)
 
 The scripts can drive the scope themselves, so you don't need to save from the
-PicoScope app. This needs:
-
-1. Pico's drivers (**PicoSDK**, from picotech.com/downloads) installed on the lab PC.
-2. The Python wrappers: `uv sync --extra pico`.
-3. The PicoScope app **closed**, because only one program can use the scope at a time.
+PicoScope app. This needs Pico's drivers and `uv sync --extra pico` (see
+[Installation](#installation), steps 3–4), and the PicoScope app **closed**, because
+only one program can use the scope at a time.
 
 Then:
 

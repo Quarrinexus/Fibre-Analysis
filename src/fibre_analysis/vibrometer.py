@@ -33,7 +33,7 @@ from scipy.signal import ShortTimeFFT, butter, sosfiltfilt
 from scipy.signal.windows import gaussian
 
 from . import setup_a
-from .io import graph_path, load_trace
+from .io import graph_path, load_trace, utf8_output
 
 
 @dataclass
@@ -213,6 +213,7 @@ def analyse(
 
 
 def main(argv: list[str] | None = None) -> None:
+    utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("trace")
     p.add_argument("--signal", default="A", help="detector channel (default A)")

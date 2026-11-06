@@ -1,4 +1,4 @@
-# fibre-analysis
+# Fibre Analysis
 
 Analysis scripts for the Part II fibre interferometer practical. Every command
 reads PicoScope CSV exports (time in s/ms/µs, volts in V/mV; "∞" over-range
@@ -63,8 +63,7 @@ afterwards. Other models need their own package (`libps2000a`, `libps3000a`,
 `libps4000a`, `libps5000a`), or install `picoscope` (the app) to get them all.
 
 *Windows / macOS:* install the 64-bit **PicoSDK** from
-[picotech.com/downloads](https://www.picotech.com/downloads) (choose your scope model,
-then *Software development kit*). If a capture then says the driver isn't found, add
+[picotech.com/downloads](https://www.picotech.com/downloads) (choose 2205A driver). If a capture then says the driver isn't found, add
 the SDK's `lib` folder to `PATH` (Windows) or `DYLD_LIBRARY_PATH` (macOS).
 
 **5. Check it works.**
@@ -81,18 +80,6 @@ If it says *No PicoScope found*:
 - `driver not installed` means step 4 isn't done.
 - `no unit found` or `PICO_NOT_FOUND` means the scope is unplugged, or another
   program (usually the PicoScope app) is using it.
-
-**For development**, also install the linter and type checker, then run all three
-checks before committing:
-
-```bash
-uv tool install ruff
-uv tool install ty
-```
-
-```bash
-uv run pytest && ruff check . && ruff format . && ty check
-```
 
 **Platforms.** Written to run on Linux, Windows and macOS: paths go through `pathlib`,
 files are read and written as UTF-8, output is forced to UTF-8 (so µ, λ, Δ print even
@@ -124,7 +111,7 @@ Collected data goes in `data/`: a bare filename such as `--out fp_scan.csv` is s
 works. Run commands from this folder. Graphs are saved in `output/` (e.g. `output/fp_scan_spectrum.png`).
 `fibre-scan` updates `output/<scan>.png` after every point.
 
-## In the lab
+## Using in the lab
 
 **Contrast vs delay (SLD and FP):** set PicoScope to save CSVs into a folder, then
 
@@ -190,13 +177,6 @@ uv run fibre-capture vib.csv --channels A B --dt 50e-6 --samples 100000   # vibr
   Pico's documented function signatures. Try one `fibre-capture` first and compare it
   with what the PicoScope app shows. The folder-watching mode (`--watch`) still works
   as a fallback.
-
-## First thing on lab day
-
-Save one PicoScope trace and run `fibre-contrast` and `fibre-calibrate` on it.
-Check that the time step and voltages look right before trusting anything else.
-The loader understands a separate `(ms)` units row and `Time (ms)` style headers,
-and it warns about units it doesn't recognise.
 
 ## What the Setup A data sheets say
 

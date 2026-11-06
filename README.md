@@ -8,7 +8,7 @@ samples are flagged) or plain `t,v` CSVs.
 uv sync                    # install
 uv run fibre-synth demo    # make fake lab data to try everything on
 uv run pytest              # check the scripts recover known answers
-ruff check . && ruff format .
+ruff check . && ruff format . && ty check
 ```
 
 ## Commands
@@ -17,15 +17,21 @@ ruff check . && ruff format .
 |---|---|---|
 | `fibre-contrast trace.csv …` | 3–5 | Fringe contrast of one or more traces (`--dark` to subtract the detector offset) |
 | `fibre-scan --watch DIR --out scan.csv` | 3–5 | Live logger: type the delay (or gain) reading, save the trace in PicoScope, it logs the contrast and plots it |
-| `fibre-envelope scan.csv --source sld` | 3 | Gaussian fit to the contrast envelope → zero path difference, SLD bandwidth Δλ, coherence length |
+| `fibre-envelope scan.csv --source sld` | 3 | Spectrum-shape fit to the contrast envelope → zero path difference, SLD bandwidth Δλ and shape, coherence length |
 | `fibre-envelope scan.csv --source fp` | 3 | Contrast revivals → cavity round trip 2nL, mode spacing, mode envelope width; FFT spectrum |
 | `fibre-calibrate trace.csv` | 3 | Fringes per modulator sweep → phase swing (π rad), µm of path difference per volt |
 | `fibre-power 5 --i1 2 --i2 0.5` | 4 | Detector V → mW/dBm, best possible contrast for given arm intensities, noise figure |
 | `fibre-vibro trace.csv` | 6 | Short-time FFT → speaker velocity v(t), displacement amplitude (fit, integration and fringe counting) |
+| `fibre-spectrum scan.csv --source sld` | 3 | Reconstruct intensity vs wavelength from a delay scan (Appendix A), with the data sheet overlaid |
 | `fibre-capture out.csv` | any | Capture a trace straight from the PicoScope (see below) |
 | `fibre-synth demo` | – | Fake lab data for trying everything out |
 
 Every command has `--help`.
+
+Collected data goes in `data/`: a bare filename such as `--out fp_scan.csv` is saved as
+`data/fp_scan.csv`, and commands look in `data/` for files you name, so `fibre-envelope fp_scan.csv`
+works. Run commands from this folder. Graphs are saved in `output/` (e.g. `output/fp_scan_spectrum.png`).
+`fibre-scan` updates `output/<scan>.png` after every point.
 
 ## In the lab
 
@@ -42,8 +48,9 @@ and `q` to quit; re-running with the same `--out` carries on. Then
 uv run fibre-envelope sld_scan.csv --source sld
 ```
 
-- **SLD:** the envelope is only ~40–50 µm wide, about 4–5 screw divisions, so step in
-  half or quarter divisions near zero path difference.
+- **SLD:** the envelope is only ~45 µm wide, about 4–5 screw divisions, so step in
+  **quarter** divisions near zero path difference. Scan ±5 divisions to include the
+  side lobes: they set the spectrum's shape in the fit.
 - **FP:** scan several mm in coarser steps to catch two or more revivals.
 - **Equal steps:** the FFT spectrum needs equal steps, otherwise it gets interpolated.
 
@@ -102,6 +109,27 @@ Check that the time step and voltages look right before trusting anything else.
 The loader understands a separate `(ms)` units row and `Time (ms)` style headers,
 and it warns about units it doesn't recognise.
 
+## What the Setup A data sheets say
+
+The data sheet values (`Setup_A_manuals_v2.pdf`) are in `setup_a.py`.
+`fibre-envelope` uses them as wavelength defaults and prints them next to your
+results. They were read off scanned plots, so treat them as ±10%.
+
+| | Data sheet | What to expect |
+|---|---|---|
+| SLD | 1560 nm, Δλ ≈ 62 nm, flat-topped | contrast envelope ≈ 45 µm FWHM, with small side lobes |
+| FP laser | 1547.7 nm, modes 1.15 nm apart, ~4.5 nm envelope, 1.83 mW | revivals every ≈ 2.08 mm (nL ≈ 1.04 mm) |
+| Amplifiers | BOA1004P **semiconductor** boosters, 88.6 nm gain band, 15.2 dBm saturation | not erbium-fibre amplifiers as the handout describes |
+
+- **Signals are small.** A rough loss budget gives ~5 mV per arm for the FP laser and
+  ~50 mV for the SLD.
+  - **Dark level:** always measure it and pass `--dark`. On fake data, forgetting a
+    1.5 mV offset costs >10% of the contrast.
+  - **Noise floor:** at these levels noise holds the contrast at about 0.02–0.03
+    where it should be zero.
+- **FP drift:** the FP spectrum shifts with current, temperature and back-reflections
+  (data sheet note). Keep the current fixed during a scan.
+
 ## Assumptions worth checking
 
 - Contrast is (Imax − Imin)/(Imax + Imin) from percentiles (Eq. 19). It is correct
@@ -111,8 +139,15 @@ and it warns about units it doesn't recognise.
 
 - One screw division = 10 µm of path difference (single pass through the air gap).
   If not, pass `--um-per-unit` to `fibre-envelope`.
-- The bandwidth uses a Gaussian spectrum model (Δλ = 0.88 λ²/FWHM). Compare the
-  manufacturer's spectrum in the manual.
+- **SLD bandwidth depends on the spectrum's shape.** The envelope width maps to Δλ
+  as 0.88 λ²/Δλ for a Gaussian but ≈ 1.2 λ²/Δλ for the flat-topped SLD. So
+  `fibre-envelope` fits a super-Gaussian spectrum with free width *and* shape
+  (order 2 = Gaussian). On fake data shaped like the data sheet it recovers Δλ to
+  ~4%, where a Gaussian-only fit reads ~25% low.
+- **Modulator sweep:** contrast is measured over the modulator's ~5 µm sweep, which
+  widens the envelope a little. `--sweep-um` (the swing from `fibre-calibrate`) models
+  this. It moves Δλ by a few %, about the same as the fit's own systematic error, so
+  quote roughly ±5%.
 - The contrast only gives |FT of spectrum| (no phase). So the FFT spectrum is only
   right for roughly symmetric spectra.
 - The vibrometer direction (sign of v) is taken from d(drive)/dt. This is valid well

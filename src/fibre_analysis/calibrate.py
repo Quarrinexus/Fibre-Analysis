@@ -7,6 +7,8 @@ that times λ is the path-difference swing. That converts the scope's time axis 
 path difference and checks the handout's "~4π for ~10 V" claim.
 
     uv run fibre-calibrate trace.csv --signal A --drive B
+
+Easiest with the FP laser: its long coherence gives fringes at any delay.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from scipy.ndimage import uniform_filter1d
 from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
 
+from . import setup_a
 from .io import load_trace
 
 
@@ -117,7 +120,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("trace")
     p.add_argument("--signal", default="A", help="detector channel (default A)")
     p.add_argument("--drive", default="B", help="function generator channel (default B)")
-    p.add_argument("--wavelength", type=float, default=1550.0, help="nm")
+    p.add_argument(
+        "--wavelength", type=float, default=setup_a.FP_CENTRE_NM, help="nm (default: FP laser; 1560 for the SLD)"
+    )
     a = p.parse_args(argv)
     tr = load_trace(a.trace)
     print(calibrate(tr.channel(a.signal), tr.channel(a.drive), tr.fs, a.wavelength))

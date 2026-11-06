@@ -31,7 +31,7 @@ from pathlib import Path
 import numpy as np
 
 from .contrast import contrast
-from .io import load_trace
+from .io import data_path, find_data, graph_path, load_trace
 
 COLUMNS = ["x", "unit", "contrast", "contrast_err", "contrast_rms", "i_max", "i_min", "mean", "file"]
 UM_PER_UNIT = {"div": 10.0, "um": 1.0, "mm": 1000.0}
@@ -45,6 +45,7 @@ class Scan:
     contrast_err: np.ndarray
     contrast_rms: np.ndarray
     mean: np.ndarray
+    n: np.ndarray  # number of measurements averaged at each position
 
     def opd_um(self, um_per_unit: float | None = None) -> np.ndarray:
         """Path difference in µm (relative to the zero of the screw)."""
@@ -55,7 +56,7 @@ class Scan:
 
 
 def load_scan(path: str | Path) -> Scan:
-    with Path(path).open() as f:
+    with find_data(path).open() as f:
         rows = list(csv.DictReader(f))
     if not rows:
         raise ValueError(f"{path} has no data rows")
@@ -63,14 +64,33 @@ def load_scan(path: str | Path) -> Scan:
     def col(name: str) -> np.ndarray:
         return np.array([float(r[name]) if r[name] not in ("", "nan") else np.nan for r in rows])
 
-    order = np.argsort(col("x"))
+    # Repeated positions are averaged; their spread (if larger) becomes the error bar.
+    x_all = np.round(col("x"), 6)
+    xs = np.unique(x_all)
+    c_all, e_all = col("contrast"), col("contrast_err")
+    contrast_, err, n = [], [], []
+    for xv in xs:
+        m = x_all == xv
+        cv, ev = c_all[m], e_all[m]
+        k = int(m.sum())
+        stat = float(np.sqrt(np.nanmean(ev**2)) / np.sqrt(k)) if np.any(np.isfinite(ev)) else np.nan
+        spread = float(np.std(cv, ddof=1) / np.sqrt(k)) if k > 1 else 0.0
+        contrast_.append(float(np.mean(cv)))
+        err.append(np.nanmax([stat, spread]) if k > 1 else stat)
+        n.append(k)
+
+    def avg(name: str) -> np.ndarray:
+        v = col(name)
+        return np.array([np.nanmean(v[x_all == xv]) for xv in xs])
+
     return Scan(
-        x=col("x")[order],
+        x=xs,
         unit=rows[0]["unit"],
-        contrast=col("contrast")[order],
-        contrast_err=col("contrast_err")[order],
-        contrast_rms=col("contrast_rms")[order],
-        mean=col("mean")[order],
+        contrast=np.array(contrast_),
+        contrast_err=np.array(err),
+        contrast_rms=avg("contrast_rms"),
+        mean=avg("mean"),
+        n=np.array(n),
     )
 
 
@@ -169,8 +189,8 @@ def main(argv: list[str] | None = None) -> None:
     g = p.add_argument_group("direct PicoScope capture (--pico)")
     g.add_argument("--pico", action="store_true", help="capture from the PicoScope directly")
     g.add_argument("--family", default="auto", help="driver family, e.g. ps2000a (default: try all)")
-    g.add_argument("--dt", type=float, default=2e-6, help="sample interval in s (default 2 µs)")
-    g.add_argument("--samples", type=int, default=10_000, help="samples per trace (default 10000 = 20 ms)")
+    g.add_argument("--dt", type=float, default=5e-6, help="sample interval in s (default 5 µs)")
+    g.add_argument("--samples", type=int, help="samples per trace (default 10000 = 50 ms, or the scope memory)")
     g.add_argument("--record", nargs="+", help="extra channels to save, e.g. B for the drive")
     g.add_argument("--range", type=float, help="fixed range in V (default: automatic)")
     g.add_argument("--resolution", type=int, default=12, help="bits, 5000 series only")
@@ -178,7 +198,7 @@ def main(argv: list[str] | None = None) -> None:
     if a.pico and a.watch:
         p.error("use either --pico or --watch, not both")
 
-    out = Path(a.out)
+    out = data_path(a.out)
     rows = _read_rows(out)
     if rows:
         print(f"Resuming {out} ({len(rows)} points)")
@@ -211,8 +231,12 @@ def main(argv: list[str] | None = None) -> None:
         line.set_data([q[0] for q in pts], [q[1] for q in pts])
         ax.relim()
         ax.autoscale_view()
-        fig.canvas.draw_idle()
+        fig.canvas.draw()
+        fig.canvas.flush_events()
         plt.pause(0.05)
+        # The window can't repaint while waiting for typed input, so keep a PNG too.
+        if rows:
+            fig.savefig(graph_path(out, ".png"), dpi=120)
 
     redraw()
     try:

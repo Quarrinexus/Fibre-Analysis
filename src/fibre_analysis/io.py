@@ -69,7 +69,7 @@ def _is_number(s: str) -> bool:
 
 
 def load_trace(path: str | Path) -> Trace:
-    path = Path(path)
+    path = find_data(path)
     text = path.read_text(encoding="utf-8-sig", errors="replace")
     lines = [ln for ln in text.splitlines()]
     sample = "\n".join(lines[:20])
@@ -128,6 +128,37 @@ def load_trace(path: str | Path) -> Trace:
             v = np.where(np.isfinite(v), v, np.nan)
         channels[names[j]] = v
     return Trace(t=t, channels=channels, path=path)
+
+
+DATA_DIR = Path("data")
+
+
+def data_path(name: str | Path) -> Path:
+    """Where new data is saved: a bare filename goes into data/; a path with a
+    folder is used as given."""
+    p = Path(name)
+    if p.parent == Path("."):
+        DATA_DIR.mkdir(exist_ok=True)
+        return DATA_DIR / p
+    return p
+
+
+def find_data(name: str | Path) -> Path:
+    """An existing data file: as given, or else inside data/."""
+    p = Path(name)
+    if not p.exists() and (DATA_DIR / p).exists():
+        return DATA_DIR / p
+    return p
+
+
+def graph_path(data_file: str | Path, suffix: str) -> Path:
+    """Where a graph made from `data_file` goes: an output/ folder beside the data
+    (beside data/ itself for files kept in data/)."""
+    data_file = Path(data_file)
+    base = data_file.parent.parent if data_file.parent.name == DATA_DIR.name else data_file.parent
+    folder = base / "output"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / (data_file.stem + suffix)
 
 
 def save_trace(path: str | Path, t: np.ndarray, channels: dict[str, np.ndarray]) -> None:

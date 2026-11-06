@@ -30,12 +30,13 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .io import Trace, save_trace
+from .io import Trace, data_path, save_trace
 
 FAMILIES = ("ps2000a", "ps3000a", "ps4000a", "ps5000a", "ps2000")
 CHANNELS = "ABCDEFGH"
 RESOLUTION_5000A = {8: 0, 12: 1, 14: 2, 15: 3, 16: 4}
 PICO_OK = 0
+DEFAULT_SAMPLES = 10_000
 POWER_STATUSES = (0x11A, 0x11E)  # no external PSU / USB3 scope on a USB2 port: carry on on USB power
 
 
@@ -197,34 +198,38 @@ class PicoScope:
     def find_timebase(self, dt: float) -> tuple[int, float, int]:
         """Slowest timebase with interval <= dt: (id, interval s, max samples)."""
         lo = next((tb for tb in range(64) if self._timebase(tb)), None)
-        if lo is None:
+        first = self._timebase(lo) if lo is not None else None
+        if lo is None or first is None:
             raise PicoError("no valid timebase - too many channels enabled for this model?")
-        if self._timebase(lo)[0] > dt:
-            warnings.warn(f"Fastest sampling is {self._timebase(lo)[0]:.3g} s, slower than requested", stacklevel=2)
-            return lo, *self._timebase(lo)
+        if first[0] > dt:
+            warnings.warn(f"Fastest sampling is {first[0]:.3g} s, slower than requested", stacklevel=2)
+            return lo, *first
         # Interval grows with the id: double until too slow/invalid, then bisect.
-        good, step = lo, 1
+        good, good_info, step = lo, first, 1
         while True:
             cand = good + step
             info = self._timebase(cand)
             if info is None or info[0] > dt:
                 bad = cand
                 break
-            good, step = cand, step * 2
+            good, good_info, step = cand, info, step * 2
         while bad - good > 1:
             mid = (good + bad) // 2
             info = self._timebase(mid)
             if info is not None and info[0] <= dt:
-                good = mid
+                good, good_info = mid, info
             else:
                 bad = mid
-        return good, *self._timebase(good)
+        return good, *good_info
 
     # ---------------------------------------------------------------- capture
-    def capture(self, n: int, dt: float, timeout: float | None = None) -> Capture:
+    def capture(self, n: int | None, dt: float, timeout: float | None = None) -> Capture:
+        """Block capture of n samples (None: up to DEFAULT_SAMPLES, or as many as the memory holds)."""
         if not self._enabled:
             raise PicoError("call configure() first")
         tb, real_dt, max_samples = self.find_timebase(dt)
+        if n is None:
+            n = min(DEFAULT_SAMPLES, max_samples)
         if n > max_samples:
             raise PicoError(
                 f"Scope memory holds {max_samples} samples with these channels; asked for {n}. "
@@ -287,7 +292,7 @@ class PicoScope:
 def autorange_capture(
     scope: PicoScope,
     channels: list[str],
-    n: int,
+    n: int | None,
     dt: float,
     ranges: dict[str, float] | None = None,
     auto: bool = True,
@@ -298,12 +303,9 @@ def autorange_capture(
     previous point's ranges) - with auto=False they are used as given."""
     steps = scope.range_steps()
     want = {c: (ranges or {}).get(c, 10.0 if 10.0 in steps else steps[-1]) for c in channels}
-    cap = None
-    for _ in range(max_tries if auto else 1):
-        set_ranges = scope.configure(want)
-        cap = scope.capture(n, dt)
-        if not auto:
-            break
+    set_ranges = scope.configure(want)
+    cap = scope.capture(n, dt)
+    for _ in range(max_tries - 1 if auto else 0):
         changed = False
         for c in channels:
             r = set_ranges[c]
@@ -320,6 +322,8 @@ def autorange_capture(
                     changed = True
         if not changed:
             break
+        set_ranges = scope.configure(want)
+        cap = scope.capture(n, dt)
     for c in sorted(cap.clipped):
         warnings.warn(f"Channel {c} clipped at the {cap.ranges[c]:g} V range", stacklevel=2)
     return cap
@@ -329,8 +333,8 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("out", help="CSV file to write")
     p.add_argument("--channels", nargs="+", default=["A", "B"])
-    p.add_argument("--dt", type=float, default=2e-6, help="sample interval in s (the nearest faster one is used)")
-    p.add_argument("--samples", type=int, default=10_000)
+    p.add_argument("--dt", type=float, default=5e-6, help="sample interval in s (default 5 µs; nearest faster used)")
+    p.add_argument("--samples", type=int, help="default: 10000, or as many as the scope memory holds")
     p.add_argument("--range", type=float, help="fixed range in V for all channels (default: automatic)")
     p.add_argument("--family", default="auto", choices=["auto", *FAMILIES])
     p.add_argument("--resolution", type=int, default=12, help="bits, 5000 series only (8/12/14/15/16)")
@@ -344,8 +348,9 @@ def main(argv: list[str] | None = None) -> None:
     except PicoError as e:
         raise SystemExit(f"error: {e}") from None
     tr = cap.trace()
-    save_trace(a.out, tr.t, tr.channels)
-    print(f"{scope.family}: {len(cap.t)} samples at {cap.dt:.3g} s ({cap.t[-1] + cap.dt:.4g} s) -> {a.out}")
+    out = data_path(a.out)
+    save_trace(out, tr.t, tr.channels)
+    print(f"{scope.family}: {len(cap.t)} samples at {cap.dt:.3g} s ({cap.t[-1] + cap.dt:.4g} s) -> {out}")
     for c in channels:
         v = cap.volts[c]
         print(f"  {c}: range ±{cap.ranges[c]:g} V, min {v.min():.4g} V, max {v.max():.4g} V")

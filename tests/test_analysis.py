@@ -1,9 +1,11 @@
 """Check each script recovers known values from fake data."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from fibre_analysis import calibrate, contrast, envelope, io, power, scan, synth, vibrometer
+from fibre_analysis import calibrate, contrast, envelope, io, power, scan, setup_a, synth, vibrometer
 from fibre_analysis.scan import load_scan
 
 RNG = np.random.default_rng(0)
@@ -77,10 +79,10 @@ def test_power_prep_question():
 
 
 def test_calibration():
-    t, v, drive = synth.fringe_trace(0.0, *synth.sld_spectrum(), fringes_per_sweep=3.6, duration=20e-3, noise=0.005)
-    cal = calibrate.calibrate(v, drive, fs=1 / (t[1] - t[0]))
+    t, v, drive = synth.fringe_trace(0.0, *synth.fp_spectrum(), fringes_per_sweep=3.6, duration=20e-3)
+    cal = calibrate.calibrate(v, drive, fs=1 / (t[1] - t[0]), wavelength_nm=setup_a.FP_CENTRE_NM)
     assert cal.fringes_per_sweep == pytest.approx(3.6, rel=0.01)
-    assert cal.opd_swing_um == pytest.approx(3.6 * 1.55, rel=0.01)
+    assert cal.opd_swing_um == pytest.approx(3.6 * 1.5477, rel=0.01)
 
 
 @pytest.fixture(scope="module")
@@ -92,18 +94,20 @@ def demo(tmp_path_factory):
 
 def test_sld_bandwidth(demo):
     scan = load_scan(demo / "sld_scan.csv")
-    res = envelope.analyse_sld(scan.opd_um(), scan.contrast, scan.contrast_err)
-    assert res.bandwidth_nm == pytest.approx(50, rel=0.15)
-    assert res.fit.x0 == pytest.approx(30, abs=3)  # zero set at 3 div = 30 µm
+    res = envelope.analyse_sld(scan.opd_um(), scan.contrast, scan.contrast_err, setup_a.SLD_CENTRE_NM)
+    assert res.bandwidth_nm == pytest.approx(setup_a.SLD_FWHM_NM, rel=0.07)
+    assert res.order == pytest.approx(4, abs=1)  # flat-topped, as on the data sheet
+    assert res.gauss_bandwidth_nm < 0.85 * setup_a.SLD_FWHM_NM  # why a Gaussian-only fit misleads
+    assert res.x0 == pytest.approx(30, abs=3)  # zero set at 3 div = 30 µm
 
 
 def test_fp_cavity(demo):
     scan = load_scan(demo / "fp_scan.csv")
-    res = envelope.analyse_fp(scan.opd_um(), scan.contrast)
-    assert res.peaks_um.size == 3  # including the one near the scan edge at 120 µm
-    assert res.spacing_um == pytest.approx(2400, rel=0.03)
-    assert res.optical_length_um == pytest.approx(1200, rel=0.03)
-    assert res.envelope_fwhm_nm == pytest.approx(3.0, rel=0.25)
+    res = envelope.analyse_fp(scan.opd_um(), scan.contrast, setup_a.FP_CENTRE_NM)
+    assert res.peaks_um.size == 3  # the one near the start counts; the rise at the end doesn't
+    assert res.spacing_um == pytest.approx(setup_a.fp_round_trip_um(), rel=0.02)
+    assert res.mode_spacing_nm == pytest.approx(setup_a.FP_MODE_SPACING_NM, rel=0.02)
+    assert res.envelope_fwhm_nm == pytest.approx(setup_a.FP_ENVELOPE_FWHM_NM, rel=0.25)
 
 
 def test_vibrometer(demo):
@@ -137,6 +141,21 @@ def test_scan_logger(demo, tmp_path, monkeypatch):
     assert list(scan.load_scan(out).x) == [1.5, 3.0]
 
 
+def test_demo_signal_levels(demo):
+    # mV-level signals like the real setup, with a dark offset that matters.
+    dark = io.load_trace(demo / "dark.csv").channel()
+    assert np.mean(dark) == pytest.approx(synth.DARK, abs=1e-4)
+    fp = load_scan(demo / "fp_scan.csv")
+    assert np.max(fp.mean) < 0.03
+
+
+def test_dark_offset_matters_at_mv_levels():
+    _t, v, _ = synth.fringe_trace(0.0, *synth.fp_spectrum(), fringes_per_sweep=3.5)
+    true = contrast.expected_max_contrast(*synth.FP_ARMS)
+    assert contrast.contrast(v, dark=synth.DARK).contrast == pytest.approx(true, abs=0.01)
+    assert contrast.contrast(v).contrast < true - 0.1  # forgetting --dark costs >10%
+
+
 def test_clis_run(demo, tmp_path):
     envelope.main([str(demo / "sld_scan.csv"), "--source", "sld", "--plot", str(tmp_path / "s.png")])
     envelope.main([str(demo / "fp_scan.csv"), "--source", "fp", "--plot", str(tmp_path / "f.png")])
@@ -145,3 +164,83 @@ def test_clis_run(demo, tmp_path):
     contrast.main([str(next((demo / "sld").glob("*.csv")))])
     power.main(["5"])
     assert (tmp_path / "v.png").exists()
+
+
+def test_spectrum_reconstruction(demo):
+    from fibre_analysis import spectrum
+
+    s = load_scan(demo / "sld_scan.csv")
+    sp = spectrum.reconstruct(s.opd_um(), s.contrast, setup_a.SLD_CENTRE_NM)
+    assert sp.wavelength_nm[np.argmax(sp.intensity)] == pytest.approx(setup_a.SLD_CENTRE_NM, abs=2)
+    assert sp.fwhm_nm() == pytest.approx(setup_a.SLD_FWHM_NM, rel=0.15)  # limited by ~24 nm resolution
+
+    f = load_scan(demo / "fp_scan.csv")
+    sp = spectrum.reconstruct(f.opd_um(), f.contrast, setup_a.FP_CENTRE_NM)
+    pk = sp.peaks_nm(min_height=0.4)
+    assert np.mean(np.diff(pk)) == pytest.approx(setup_a.FP_MODE_SPACING_NM, rel=0.02)
+
+
+def test_spectrum_cli(demo, tmp_path):
+    import shutil
+
+    from fibre_analysis import spectrum
+
+    shutil.copy(demo / "fp_scan.csv", tmp_path / "fp.csv")
+    spectrum.main([str(tmp_path / "fp.csv"), "--source", "fp"])
+    assert (tmp_path / "fp_spectrum.csv").exists()
+    assert (tmp_path / "output" / "fp_spectrum.png").exists()
+
+
+def test_repeated_points_are_averaged(tmp_path):
+    rows = [
+        {
+            "x": "1",
+            "unit": "mm",
+            "contrast": "0.9",
+            "contrast_err": "0.01",
+            "contrast_rms": "0.9",
+            "i_max": "",
+            "i_min": "",
+            "mean": "1",
+            "file": "",
+        },
+        {
+            "x": "2",
+            "unit": "mm",
+            "contrast": "0.3",
+            "contrast_err": "0.01",
+            "contrast_rms": "0.3",
+            "i_max": "",
+            "i_min": "",
+            "mean": "1",
+            "file": "",
+        },
+        {
+            "x": "2",
+            "unit": "mm",
+            "contrast": "0.7",
+            "contrast_err": "0.01",
+            "contrast_rms": "0.7",
+            "i_max": "",
+            "i_min": "",
+            "mean": "1",
+            "file": "",
+        },
+    ]
+    scan._write_rows(tmp_path / "s.csv", rows)
+    s = load_scan(tmp_path / "s.csv")
+    assert list(s.x) == [1, 2]
+    assert list(s.n) == [1, 2]
+    assert s.contrast[1] == pytest.approx(0.5)
+    assert s.contrast_err[1] == pytest.approx(0.2)  # spread of the repeats, not the tiny per-trace error
+
+
+def test_data_folder(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert io.data_path("x.csv") == Path("data/x.csv")
+    assert (tmp_path / "data").is_dir()
+    assert io.data_path("sub/x.csv") == Path("sub/x.csv")
+    (tmp_path / "data" / "y.csv").write_text("t,v\n0,1\n1,2\n")
+    assert io.find_data("y.csv") == Path("data/y.csv")
+    assert io.load_trace("y.csv").channel()[1] == 2
+    assert io.graph_path("data/y.csv", ".png") == Path("output/y.png")

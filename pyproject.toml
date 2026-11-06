@@ -22,6 +22,7 @@ fibre-power = "fibre_analysis.power:main"
 fibre-vibro = "fibre_analysis.vibrometer:main"
 fibre-synth = "fibre_analysis.synth:main"
 fibre-capture = "fibre_analysis.capture:main"
+fibre-spectrum = "fibre_analysis.spectrum:main"
 
 [project.optional-dependencies]
 pico = [

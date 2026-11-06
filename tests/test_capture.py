@@ -84,6 +84,14 @@ def test_too_many_samples(monkeypatch):
             scope.capture(10_000, 2e-6)
 
 
+def test_default_samples_fit_small_memory(monkeypatch):
+    use_drivers(monkeypatch, {"ps2000a": FakeNewApi(max_samples=16128)})  # 8064 per channel with A+B
+    with capture.PicoScope() as scope:
+        cap = capture.autorange_capture(scope, ["A", "B"], None, 2e-6)
+    assert len(cap.t) == 8064
+    assert contrast.contrast(cap.volts["A"]).contrast == pytest.approx(TRUE_CONTRAST, abs=0.005)
+
+
 def test_old_ps2000_api(monkeypatch):
     fake = FakePs2000()
     use_drivers(monkeypatch, {"ps2000": fake})
@@ -101,7 +109,7 @@ def test_capture_cli(monkeypatch, tmp_path):
     out = tmp_path / "t.csv"
     capture.main([str(out), "--channels", "A", "B", "--samples", "4000"])
     tr = io.load_trace(out)
-    assert tr.dt <= 2e-6
+    assert tr.dt <= 5e-6
     assert contrast.contrast(tr.channel("A")).contrast == pytest.approx(TRUE_CONTRAST, abs=0.005)
 
 

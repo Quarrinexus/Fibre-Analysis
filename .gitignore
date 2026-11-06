@@ -9,6 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
+# data and figures
+data/
+output/
+
 # generated fake data and figures
 demo/
 *.png

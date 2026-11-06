@@ -26,14 +26,14 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import ShortTimeFFT, butter, sosfiltfilt
 from scipy.signal.windows import gaussian
 
-from .io import load_trace
+from . import setup_a
+from .io import graph_path, load_trace
 
 
 @dataclass
@@ -96,7 +96,7 @@ def analyse(
     fs: float,
     drive: np.ndarray | None = None,
     drive_freq: float | None = None,
-    wavelength: float = 1550e-9,
+    wavelength: float = setup_a.FP_CENTRE_NM * 1e-9,
     window: float | None = None,
     fmin: float | None = None,
     power_threshold: float = 0.05,
@@ -116,7 +116,7 @@ def analyse(
 
     if window is None:
         window = 0.01
-        if n_fringes:
+        if n_fringes and drive_freq is not None:
             # Peak fringe frequency of a sinusoidal motion is ~π/2 x the mean. The
             # window must hold enough fringes at well below the peak speed (fmin =
             # 2/window ~ peak/4), but stay short compared with the drive period.
@@ -218,9 +218,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--signal", default="A", help="detector channel (default A)")
     p.add_argument("--drive", default="B", help="function generator channel (default B; 'none' if not recorded)")
     p.add_argument("--drive-freq", type=float, help="Hz, if no drive channel")
-    p.add_argument("--wavelength", type=float, default=1550.0, help="nm")
+    p.add_argument("--wavelength", type=float, default=setup_a.FP_CENTRE_NM, help="nm (default: FP laser)")
     p.add_argument("--window", type=float, help="STFT window length in s (default: chosen from the fringe rate)")
-    p.add_argument("--plot", help="figure file (default: <trace>_vibro.png)")
+    p.add_argument("--plot", help="figure file (default: output/<trace>_vibro.png)")
     p.add_argument("--show", action="store_true")
     a = p.parse_args(argv)
 
@@ -256,7 +256,7 @@ def main(argv: list[str] | None = None) -> None:
         ax.plot(tr.t, drive, color="C3", alpha=0.4, lw=0.8)
         ax.set_ylabel("drive [V]", color="C3")
     fig.tight_layout()
-    out = a.plot or str(Path(a.trace).with_suffix("")) + "_vibro.png"
+    out = a.plot or graph_path(a.trace, "_vibro.png")
     fig.savefig(out, dpi=150)
     print(f"Figure saved to {out}")
     if a.show:

@@ -143,7 +143,7 @@ def _scan(folder: Path, name: str, positions_div: np.ndarray, nu, s, arms, lambd
         t, v, drive = fringe_trace(opd, nu, s, *arms, fringes_per_sweep=n, lambda0=lambda0, rng=rng)
         p = folder / name / f"{name}_{x:+08.2f}div.csv"
         save_trace(p, t, {"Channel A": v, "Channel B": drive})
-        rows.append(make_row(x, "div", v, p, dark=DARK))
+        rows.append(make_row(x, "div", v, p, dark=DARK, fs=1 / (t[1] - t[0]), drive=drive))
     _write_rows(folder / f"{name}_scan.csv", rows)
 
 

@@ -36,7 +36,7 @@ before you call a change done.
 |---|---|
 | `src/fibre_analysis/io.py` | trace CSV load/save (PicoScope format), `data_path`, `find_data`, `graph_path` |
 | `src/fibre_analysis/contrast.py` | fringe contrast of one trace (`fibre-contrast`) |
-| `src/fibre_analysis/scan.py` | interactive contrast-vs-position logger (`fibre-scan`), `load_scan` |
+| `src/fibre_analysis/scan.py` | interactive logger (`fibre-scan`), `load_scan`, re-derive from traces (`fibre-rescan`) |
 | `src/fibre_analysis/capture.py` | direct PicoScope capture via picosdk ctypes (`fibre-capture`) |
 | `src/fibre_analysis/envelope.py` | SLD bandwidth fit and FP cavity length (`fibre-envelope`) |
 | `src/fibre_analysis/spectrum.py` | spectrum reconstruction by FFT (`fibre-spectrum`) |
@@ -77,9 +77,16 @@ before you call a change done.
   whatever fits in memory.
 - **Wiring:** detector on **channel A**, function generator (modulator drive) on
   **channel B**. Inputs DC-coupled; the contrast needs the DC level.
-- **Contrast** default is the percentile max/min estimator (handout Eq. 19). The `rms`
-  estimator is biased when a sweep holds a non-integer number of fringes; it's kept
-  only for low-contrast comparison.
+- **Contrast** default is Eq. 19 (percentile max/min) **per modulator period**,
+  averaged, with the spread as the error (`contrast_per_period`). Periods are timed
+  from the drive on channel B (recorded by default) or else the detector. Don't go
+  back to whole-trace contrast with fixed-chunk errors: chunks shorter than a fringe
+  gave meaningless error bars, and single glitches dragged the whole-trace min. The
+  whole-trace value is kept in `contrast_whole`. A cosine fit was tried and rejected
+  (real fringes aren't sinusoidal at the current settings). `rms` is only for
+  low-contrast comparison.
+- `fibre-rescan` re-derives a scan from its stored traces into a new
+  `<scan>_period.csv`; it refuses to overwrite the original.
 - **Path difference** = change in delay-line air gap. The micrometer reads mm,
   0.01 mm (10 µm) per division; `--unit mm` or `div`.
 - **SLD** (1560 nm, Δλ ≈ 62 nm, flat-topped): coherence length ~40 µm, so fringes

@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 fibre-contrast = "fibre_analysis.contrast:main"
 fibre-scan = "fibre_analysis.scan:main"
+fibre-rescan = "fibre_analysis.scan:rescan_main"
 fibre-envelope = "fibre_analysis.envelope:main"
 fibre-calibrate = "fibre_analysis.calibrate:main"
 fibre-power = "fibre_analysis.power:main"

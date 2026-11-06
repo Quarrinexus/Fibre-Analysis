@@ -244,3 +244,59 @@ def test_data_folder(tmp_path, monkeypatch):
     assert io.find_data("y.csv") == Path("data/y.csv")
     assert io.load_trace("y.csv").channel()[1] == 2
     assert io.graph_path("data/y.csv", ".png") == Path("output/y.png")
+
+
+def _fp_trace(n_fringes, duration=20e-3, mod_freq=100.0, **kw):
+    nu, s = synth.fp_spectrum()
+    return synth.fringe_trace(
+        0.0, nu, s, 4.0, 3.5, fringes_per_sweep=n_fringes, mod_freq=mod_freq, fs=390e3, duration=duration,
+        noise=0.01, dark=0.0, rng=RNG, **kw,
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("n_fringes", [0.99, 1.7, 3.6])
+def test_per_period_contrast_known_answer(n_fringes):
+    t, v, drive = _fp_trace(n_fringes)
+    true = contrast.expected_max_contrast(4.0, 3.5)
+    fs = 1 / (t[1] - t[0])
+    r = contrast.contrast_per_period(v, fs, drive)
+    assert r.method == "period" and r.n >= 2
+    assert r.contrast == pytest.approx(true, abs=0.01)
+    assert r.error < 0.01  # honest: periods agree, so the error is small
+
+
+def test_per_period_timed_from_detector_at_one_fringe_per_sweep():
+    t, v, _ = _fp_trace(1.0)
+    fs = 1 / (t[1] - t[0])
+    # Triangle drive at 100 Hz: each 5 ms ramp holds one fringe, so one fringe period = one ramp = a full 2π.
+    assert contrast.sweep_period(fs, v) == pytest.approx(5e-3, rel=0.02)
+    r = contrast.contrast_per_period(v, fs)
+    assert r.contrast == pytest.approx(contrast.expected_max_contrast(4.0, 3.5), abs=0.01)
+
+
+def test_per_period_resists_a_glitch():
+    nu, s = synth.fp_spectrum()
+    t, v, drive = synth.fringe_trace(
+        0.0, nu, s, 4.0, 1.0, fringes_per_sweep=2.0, mod_freq=100.0, fs=390e3, duration=25e-3, noise=0.01, dark=0.0,
+        rng=RNG,
+    )  # fmt: skip
+    fs = 1 / (t[1] - t[0])
+    clean = contrast.contrast_per_period(v, fs, drive).contrast
+    assert clean == pytest.approx(0.8, abs=0.01)  # minimum ~1 V, like the real 14.5 mm trace
+    v = v.copy()
+    v[-300:] = 0.1  # brief dropout in the last, incomplete period
+    assert contrast.contrast(v).contrast > clean + 0.02  # whole-trace estimate is dragged
+    assert contrast.contrast_per_period(v, fs, drive).contrast == pytest.approx(clean, abs=0.005)
+
+
+def test_rescan_writes_new_file_and_keeps_original(demo, tmp_path, monkeypatch):
+    import shutil
+
+    monkeypatch.chdir(tmp_path)
+    shutil.copy(demo / "fp_scan.csv", tmp_path / "fp.csv")
+    before = (tmp_path / "fp.csv").read_text()
+    scan.rescan_main([str(tmp_path / "fp.csv"), "--dark", str(synth.DARK)])
+    assert (tmp_path / "fp.csv").read_text() == before
+    new = load_scan(tmp_path / "fp_period.csv")
+    old = load_scan(tmp_path / "fp.csv")
+    assert np.allclose(new.contrast, old.contrast, atol=0.02)

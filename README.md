@@ -23,6 +23,7 @@ ruff check . && ruff format . && ty check
 | `fibre-power 5 --i1 2 --i2 0.5` | 4 | Detector V → mW/dBm, best possible contrast for given arm intensities, noise figure |
 | `fibre-vibro trace.csv` | 6 | Short-time FFT → speaker velocity v(t), displacement amplitude (fit, integration and fringe counting) |
 | `fibre-spectrum scan.csv --source sld` | 3 | Reconstruct intensity vs wavelength from a delay scan (Appendix A), with the data sheet overlaid |
+| `fibre-rescan scan.csv` | 3–5 | Re-derive a scan's contrast from its stored traces into a new `<scan>_period.csv` |
 | `fibre-capture out.csv` | any | Capture a trace straight from the PicoScope (see below) |
 | `fibre-synth demo` | – | Fake lab data for trying everything out |
 
@@ -132,11 +133,10 @@ results. They were read off scanned plots, so treat them as ±10%.
 
 ## Assumptions worth checking
 
-- Contrast is (Imax − Imin)/(Imax + Imin) from percentiles (Eq. 19). It is correct
-  for any number of fringes per sweep, provided there is at least one. The `rms`
-  estimate, in the `contrast_rms` column, is only for comparison at very low
-  contrast.
-
+- Contrast is Eq. 19 applied to each whole modulator period and averaged; the error
+  bar is the spread between periods (and between repeats at the same position).
+  Periods are timed from the drive on channel B, which `fibre-scan --pico` records
+  by default, or else from the detector signal.
 - One screw division = 10 µm of path difference (single pass through the air gap).
   If not, pass `--um-per-unit` to `fibre-envelope`.
 - **SLD bandwidth depends on the spectrum's shape.** The envelope width maps to Δλ

@@ -200,7 +200,8 @@ class PicoSource:
         a = self.a
         cap = autorange_capture(self.scope, self.record, a.samples, a.dt, self.ranges, auto=not a.range)
         self.ranges = cap.ranges  # start the next point from here: usually one capture
-        path = self.dir / f"{self.stem}_{x:g}{a.unit}_{time.strftime('%H%M%S')}.csv"
+        stamp = time.strftime("%H%M%S") + f"{int(time.time() * 1000) % 1000:03d}"  # unique even for fast repeats
+        path = self.dir / f"{self.stem}_{x:g}{a.unit}_{stamp}.csv"
         tr = cap.trace()
         save_trace(path, tr.t, tr.channels)
         print(f"  captured {len(cap.t)} samples, range ±{cap.ranges[self.det]:g} V")
@@ -230,6 +231,10 @@ def main(argv: list[str] | None = None) -> None:
     g.add_argument("--record", nargs="+", help="extra channels to save (B, the drive, is always saved)")
     g.add_argument("--range", type=float, help="fixed range in V (default: automatic)")
     g.add_argument("--resolution", type=int, default=12, help="bits, 5000 series only")
+    g.add_argument(
+        "--repeats", type=int, default=1, help="captures per Enter press (repeats are averaged in the analysis)"
+    )
+    g.add_argument("--repeat-wait", type=float, default=2.0, help="seconds between repeats (default 2)")
     a = p.parse_args(argv)
     if a.pico and a.watch:
         p.error("use either --pico or --watch, not both")
@@ -275,6 +280,7 @@ def main(argv: list[str] | None = None) -> None:
             fig.savefig(graph_path(out, ".png"), dpi=120)
 
     redraw()
+    groups: list[int] = [1] * len(rows)  # captures per Enter press, so "u" undoes a whole point
     try:
         while True:
             s = input(f"{a.quantity} [{a.unit}] (u = undo, q = quit): ").strip()
@@ -282,7 +288,10 @@ def main(argv: list[str] | None = None) -> None:
                 break
             if s.lower() == "u":
                 if rows:
-                    print(f"Removed x = {rows.pop()['x']}")
+                    n_undo = groups.pop() if groups else 1
+                    x_undo = rows[-1]["x"]
+                    del rows[-n_undo:]
+                    print(f"Removed x = {x_undo} ({n_undo} capture{'s' if n_undo > 1 else ''})")
                     _write_rows(out, rows)
                     redraw()
                 continue
@@ -292,33 +301,46 @@ def main(argv: list[str] | None = None) -> None:
                 print("Type a number, u or q")
                 continue
 
-            try:  # any failure skips this point but keeps the session alive
-                if source is not None:
-                    path, tr = source.get(x)
-                    channel = source.det
-                else:
-                    if watch:
-                        print("  waiting for a new CSV - save the trace from PicoScope now...")
-                        path = _wait_for_new_csv(watch, since=time.time() - 1)
-                        if path is None:
-                            print("  no new file appeared; point skipped")
-                            continue
+            n_rep = max(a.repeats, 1) if source is not None else 1
+            added = 0
+            for k in range(n_rep):
+                if k:
+                    time.sleep(a.repeat_wait)
+                try:  # any failure skips this capture but keeps the session alive
+                    if source is not None:
+                        path, tr = source.get(x)
+                        channel = source.det
                     else:
-                        path = Path(input("  trace file: ").strip().strip("'\"")).expanduser()
-                    tr = load_trace(path)
-                    channel = a.channel
-                row = row_from_trace(x, a.unit, tr, path, a.dark, channel)
-            except Exception as e:
-                print(f"  point skipped: {e}")
-                continue
-
-            rows.append(row)
-            _write_rows(out, rows)
-            print(
-                f"  {path.name}: C = {row['contrast']} ± {row['contrast_err']} ({row['n_periods']} periods; "
-                f"whole-trace {row['contrast_whole']})"
-            )
-            redraw()
+                        if watch:
+                            print("  waiting for a new CSV - save the trace from PicoScope now...")
+                            path = _wait_for_new_csv(watch, since=time.time() - 1)
+                            if path is None:
+                                print("  no new file appeared; point skipped")
+                                continue
+                        else:
+                            path = Path(input("  trace file: ").strip().strip("'\"")).expanduser()
+                        tr = load_trace(path)
+                        channel = a.channel
+                    row = row_from_trace(x, a.unit, tr, path, a.dark, channel)
+                except Exception as e:
+                    print(f"  capture skipped: {e}")
+                    continue
+                rows.append(row)
+                added += 1
+                _write_rows(out, rows)
+                tag = f" [{k + 1}/{n_rep}]" if n_rep > 1 else ""
+                print(
+                    f"  {path.name}{tag}: C = {row['contrast']} ± {row['contrast_err']} ({row['n_periods']} periods; "
+                    f"whole-trace {row['contrast_whole']})"
+                )
+            if added:
+                groups.append(added)
+                if added > 1:
+                    cs = np.array([float(r["contrast"]) for r in rows[-added:]])
+                    print(
+                        f"  -> mean C = {cs.mean():.4f} ± {cs.std(ddof=1) / np.sqrt(added):.4f} over {added} captures"
+                    )
+                redraw()
     finally:
         if source is not None:
             source.close()
@@ -368,3 +390,88 @@ def rescan_main(argv: list[str] | None = None) -> None:
         print("Largest changes (position: old -> new):")
         for _, d, x, c_old, c_new in big:
             print(f"  {x}: {float(c_old):.3f} -> {float(c_new):.3f}  ({d:+.3f})")
+
+
+def monitor_main(argv: list[str] | None = None) -> None:
+    """Log contrast against time at a fixed delay (`fibre-monitor`).
+
+    Leave the micrometer alone; the scope captures every --interval seconds for
+    --duration seconds (or until Ctrl-C). The log is an ordinary scan file with
+    x = seconds since the start, so every scan tool reads it.
+
+        uv run fibre-monitor --out monitor_14p50mm.csv --interval 5 --duration 300
+    """
+    utf8_output()
+    p = argparse.ArgumentParser(description=monitor_main.__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--out", required=True, help="log CSV (put the position in the name, e.g. monitor_14p50mm.csv)")
+    p.add_argument("--interval", type=float, default=5.0, help="seconds between captures (default 5)")
+    p.add_argument("--duration", type=float, default=300.0, help="seconds to run; 0 = until Ctrl-C (default 300)")
+    p.add_argument("-c", "--channel", help="detector channel (default A)")
+    p.add_argument("--dark", type=float, default=0.0, help="detector dark level in V")
+    p.add_argument("--family", default="auto")
+    p.add_argument("--dt", type=float, default=5e-6, help="sample interval in s (default 5 µs)")
+    p.add_argument("--samples", type=int, help="samples per trace (default: what fits)")
+    p.add_argument("--record", nargs="+", help="extra channels to save")
+    p.add_argument("--range", type=float, help="fixed range in V (default: automatic)")
+    p.add_argument("--resolution", type=int, default=12)
+    a = p.parse_args(argv)
+    a.unit = "s"
+
+    from .capture import PicoError
+
+    out = data_path(a.out)
+    rows = _read_rows(out)
+    if rows:
+        p.error(f"{out} already exists: choose a new --out for each monitoring run")
+    try:
+        source = PicoSource(a, out)
+    except PicoError as e:
+        p.exit(1, f"error: {e}\n")
+    print(f"Logging every {a.interval:g} s " + (f"for {a.duration:g} s" if a.duration else "until Ctrl-C") + " ...")
+    t0 = time.time()
+    try:
+        while not a.duration or time.time() - t0 <= a.duration:
+            t_next = time.time() + a.interval
+            elapsed = round(time.time() - t0, 1)
+            try:
+                path, tr = source.get(elapsed)
+                row = row_from_trace(elapsed, "s", tr, path, a.dark, source.det)
+            except Exception as e:  # keep logging through a bad capture
+                print(f"  capture skipped: {e}")
+            else:
+                rows.append(row)
+                _write_rows(out, rows)
+                print(f"  t = {elapsed:6.1f} s: C = {row['contrast']} ± {row['contrast_err']}")
+            time.sleep(max(0.0, t_next - time.time()))
+    except KeyboardInterrupt:
+        print("  stopped")
+    finally:
+        source.close()
+
+    if not rows:
+        return
+    t = np.array([float(r["x"]) for r in rows])
+    c = np.array([float(r["contrast"]) for r in rows])
+    sd = c.std(ddof=1) if len(c) > 1 else 0.0
+    print(
+        f"\n{len(c)} captures over {t[-1]:.0f} s: mean C = {c.mean():.4f}, std {sd:.4f}, "
+        f"range {c.min():.4f}-{c.max():.4f}"
+    )
+    if len(c) > 2 and np.std(c[:-1]) > 0 and np.std(c[1:]) > 0:
+        r1 = float(np.corrcoef(c[:-1], c[1:])[0, 1])
+        print(f"  correlation between consecutive captures {r1:+.2f} (near 0: changes faster than {a.interval:g} s)")
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 3.5))
+    err = np.array([float(r["contrast_err"]) for r in rows])
+    ax.errorbar(t, c, yerr=np.nan_to_num(err), fmt="o-", ms=3, lw=0.8)
+    ax.set_xlabel("time [s]")
+    ax.set_ylabel("contrast")
+    fig.tight_layout()
+    png = graph_path(out, ".png")
+    fig.savefig(png, dpi=130)
+    print(f"Saved {out} and {png}")

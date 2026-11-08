@@ -42,7 +42,8 @@ before you call a change done.
 |---|---|
 | `src/fibre_analysis/io.py` | trace CSV load/save (PicoScope format), `data_path`, `find_data`, `graph_path` |
 | `src/fibre_analysis/contrast.py` | fringe contrast of one trace (`fibre-contrast`) |
-| `src/fibre_analysis/scan.py` | interactive logger (`fibre-scan`), `load_scan`, re-derive from traces (`fibre-rescan`) |
+| `src/fibre_analysis/scan.py` | interactive logger (`fibre-scan`, `--repeats`), `load_scan`, re-derive from traces (`fibre-rescan`), contrast vs time (`fibre-monitor`) |
+| `src/fibre_analysis/count.py` | micrometer calibration by fringe counting (`fibre-count`); runs logged to `data/fringecount.csv` |
 | `src/fibre_analysis/capture.py` | direct PicoScope capture via picosdk ctypes (`fibre-capture`) |
 | `src/fibre_analysis/envelope.py` | SLD bandwidth fit and FP cavity length (`fibre-envelope`) |
 | `src/fibre_analysis/spectrum.py` | spectrum reconstruction by FFT (`fibre-spectrum`) |
@@ -51,6 +52,8 @@ before you call a change done.
 | `src/fibre_analysis/power.py` | volts ↔ mW/dBm, noise figure (`fibre-power`) |
 | `src/fibre_analysis/setup_a.py` | data-sheet constants for this setup (defaults and comparisons) |
 | `src/fibre_analysis/synth.py` | fake data shaped like the real setup (`fibre-synth`) |
+| `src/fibre_analysis/datasheets/` | manufacturer spectra traced off the data sheets (FP, SLD); read via `setup_a.datasheet_spectrum` |
+| `tools/digitise_datasheets.py` | re-traces those curves from `../Setup_A_manuals_v2.pdf` (needs `pdftoppm`); writes check images to `output/` |
 | `tests/fake_pico.py` | fake picosdk drivers used by `tests/test_capture.py` |
 | `data/` | **collected lab data, git-ignored**: scan CSVs, `<scan>_traces/` raw traces |
 | `output/` | graphs, git-ignored |
@@ -76,7 +79,8 @@ before you call a change done.
   `main` with `utf8_output()`. Check with
   `PYTHONUTF8=0 PYTHONCOERCECLOCALE=0 LC_ALL=C uv run pytest`, which simulates
   Windows' non-UTF-8 defaults.
-- `setup_a.py` values were read by eye off scanned plots (±10%). Use them as defaults
+- `setup_a.py` spectral values come from curves traced off the data sheets by
+  `tools/digitise_datasheets.py` (in `src/fibre_analysis/datasheets/`). Use them as defaults
   and for comparison, never as measured results.
 - Be honest about uncertainty: if a method has a systematic error, say so in the
   docstring and the printed output rather than hiding it.
@@ -98,12 +102,16 @@ before you call a change done.
   low-contrast comparison.
 - `fibre-rescan` re-derives a scan from its stored traces into a new
   `<scan>_period.csv`; it refuses to overwrite the original.
+- **Fringe counting** (`fibre-count`): the user can't turn the micrometer continuously and only
+  gives start/end readings, so counting must tolerate pauses and uneven speed (hysteresis
+  crossings) but assumes one direction. A still (drift) run takes its fringe size from the
+  last moving run in the log.
 - **Path difference** = change in delay-line air gap. The micrometer reads mm,
   0.01 mm (10 µm) per division; `--unit mm` or `div`.
-- **SLD** (1560 nm, Δλ ≈ 62 nm, flat-topped): coherence length ~40 µm, so fringes
+- **SLD** (1559 nm, Δλ = 67.7 nm, flat-topped): contrast peak ≈ 33 µm FWHM, so fringes
   only within ~±0.02 mm of zero path difference. Its bandwidth comes from a
   super-Gaussian spectrum fit, because a Gaussian fit reads ~25% low for this shape.
-- **FP laser** (1547.7 nm, modes 1.15 nm apart): contrast revives every 2nL ≈ 2.08 mm.
+- **FP laser** (1547.7 nm, modes 1.158 nm apart): contrast revives every 2nL ≈ 2.07 mm.
   It shows strong mode-partition noise: the contrast between revivals fluctuates
   with nothing moving, so revival *positions* are robust but shapes are not. The
   revival finder fits a regular comb for this reason; don't revert it to plain peak

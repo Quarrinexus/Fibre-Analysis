@@ -19,7 +19,9 @@ Only |FT| is measured (no phase), so the result is symmetric about λ0: it
 shows the width and the mode spacing, not lopsidedness.
 
 Writes <scan>_spectrum.csv (wavelength_nm, intensity) and output/<scan>_spectrum.png
-with the data-sheet spectrum overlaid.
+with the manufacturer spectrum (traced off the data sheet) overlaid. The
+reconstruction's absolute wavelengths rest on the assumed centre wavelength, so
+compare spacings and widths, not exact positions.
 """
 
 from __future__ import annotations
@@ -122,15 +124,10 @@ def reconstruct(
 
 
 def datasheet_spectrum(source: str, lam_nm: np.ndarray) -> np.ndarray:
-    if source == "sld":
-        w = setup_a.SLD_FWHM_NM
-        return np.exp(-np.log(2) * np.abs(2 * (lam_nm - setup_a.SLD_CENTRE_NM) / w) ** 4)
-    # FP: modes 1.15 nm apart under the envelope, drawn with the data sheet's ~0.15 nm line width.
-    centre, dl = setup_a.FP_CENTRE_NM, setup_a.FP_MODE_SPACING_NM
-    env = np.exp(-4 * np.log(2) * ((lam_nm - centre) / setup_a.FP_ENVELOPE_FWHM_NM) ** 2)
-    m = np.round((lam_nm - centre) / dl)
-    comb = np.exp(-4 * np.log(2) * ((lam_nm - centre - m * dl) / 0.15) ** 2)
-    return env * comb
+    """The manufacturer's spectrum traced off the data sheet, on the wavelengths
+    `lam_nm` (zero outside the plotted range)."""
+    lam, inten = setup_a.datasheet_spectrum(source)
+    return np.interp(lam_nm, lam, inten, left=0.0, right=0.0)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -185,8 +182,9 @@ def main(argv: list[str] | None = None) -> None:
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.plot(sp.wavelength_nm[view], sp.intensity[view], label="reconstructed from scan")
     ref = datasheet_spectrum(a.source, sp.wavelength_nm[view])
-    ax.plot(sp.wavelength_nm[view], ref, "--", lw=1, alpha=0.8, label="data sheet (approx.)")
-    ax.set_xlabel("wavelength [nm]")
+    cond = "650 mA" if a.source == "sld" else "24.1 mA, 25 °C"
+    ax.plot(sp.wavelength_nm[view], ref, "--", lw=1, alpha=0.8, label=f"data sheet, digitised ({cond})")
+    ax.set_xlabel(f"wavelength [nm]  (reconstruction centred on an assumed {centre:g} nm)")
     ax.set_ylabel("intensity (normalised)")
     ax.set_title(f"{a.source.upper()} spectrum: resolution ≈ {sp.resolution_nm:.2f} nm")
     ax.legend()

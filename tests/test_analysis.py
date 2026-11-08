@@ -328,3 +328,19 @@ def test_output_survives_a_non_utf8_pipe():
         sys.stdout = old
         pipe.detach()
     assert written.decode("utf-8").strip() == "λ µ Δ π ±"
+
+
+def test_digitised_datasheets():
+    from scipy.signal import find_peaks
+
+    lam, inten = setup_a.datasheet_spectrum("fp")
+    assert inten.max() == pytest.approx(1.0)
+    pk, _ = find_peaks(inten, height=0.1)
+    assert len(pk) == 8  # modes above 10% on the data-sheet plot
+    assert np.mean(np.diff(lam[pk])) == pytest.approx(setup_a.FP_MODE_SPACING_NM, abs=0.02)
+    assert lam[pk][np.argmax(inten[pk])] == pytest.approx(1549.66, abs=0.1)
+
+    lam, inten = setup_a.datasheet_spectrum("sld")
+    half = lam[inten >= 0.5]
+    assert half.max() - half.min() == pytest.approx(setup_a.SLD_FWHM_NM, abs=1.0)
+    assert (half.max() + half.min()) / 2 == pytest.approx(setup_a.SLD_CENTRE_NM, abs=1.0)

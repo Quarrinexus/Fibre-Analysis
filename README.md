@@ -93,6 +93,7 @@ PicoSDK for that OS (on Apple-silicon Macs, check Pico supports your model).
 | Command | Handout section | What it does |
 |---|---|---|
 | `fibre-contrast trace.csv …` | 3–5 | Fringe contrast of one or more traces (`--dark` to subtract the detector offset) |
+| `fibre-scan --pico --out scan.csv [--repeats N]` | 3–5 | Live logger driving the scope: type the delay (or gain) reading, it captures (N times with `--repeats`), logs and plots the contrast; `u` undoes a whole point |
 | `fibre-scan --watch DIR --out scan.csv` | 3–5 | Live logger: type the delay (or gain) reading, save the trace in PicoScope, it logs the contrast and plots it |
 | `fibre-envelope scan.csv --source sld` | 3 | Spectrum-shape fit to the contrast envelope → zero path difference, SLD bandwidth Δλ and shape, coherence length |
 | `fibre-envelope scan.csv --source fp` | 3 | Contrast revivals → cavity round trip 2nL, mode spacing, mode envelope width; FFT spectrum |
@@ -101,6 +102,8 @@ PicoSDK for that OS (on Apple-silicon Macs, check Pico supports your model).
 | `fibre-vibro trace.csv` | 6 | Short-time FFT → speaker velocity v(t), displacement amplitude (fit, integration and fringe counting) |
 | `fibre-spectrum scan.csv --source sld` | 3 | Reconstruct intensity vs wavelength from a delay scan (Appendix A), with the data sheet overlaid |
 | `fibre-rescan scan.csv` | 3–5 | Re-derive a scan's contrast from its stored traces into a new `<scan>_period.csv` |
+| `fibre-count --pico` | 3 | Micrometer calibration: counts fringes while you turn (one direction, pauses fine), from start/end readings → single vs double pass, scale factor; logs every run |
+| `fibre-monitor --out monitor.csv` | 3 | Contrast against time at a fixed position (every 5 s for 5 min by default) |
 | `fibre-capture out.csv` | any | Capture a trace straight from the PicoScope (see below) |
 | `fibre-synth demo` | – | Fake lab data for trying everything out |
 
@@ -182,12 +185,14 @@ uv run fibre-capture vib.csv --channels A B --dt 50e-6 --samples 100000   # vibr
 
 The data sheet values (`Setup_A_manuals_v2.pdf`) are in `setup_a.py`.
 `fibre-envelope` uses them as wavelength defaults and prints them next to your
-results. They were read off scanned plots, so treat them as ±10%.
+results. The spectra were traced off the scanned plots by
+`tools/digitise_datasheets.py` (about one pixel accurate); the traced curves are in
+`src/fibre_analysis/datasheets/` and are what `fibre-spectrum` overlays.
 
 | | Data sheet | What to expect |
 |---|---|---|
-| SLD | 1560 nm, Δλ ≈ 62 nm, flat-topped | contrast envelope ≈ 45 µm FWHM, with small side lobes |
-| FP laser | 1547.7 nm, modes 1.15 nm apart, ~4.5 nm envelope, 1.83 mW | revivals every ≈ 2.08 mm (nL ≈ 1.04 mm) |
+| SLD | Δλ = 67.7 nm (−3 dB), centre 1559 nm, flat-topped | contrast peak ≈ 33 µm FWHM; C > 0.05 only within ±35 µm |
+| FP laser | 1547.7 nm, modes 1.158 nm apart, ~5.2 nm envelope, 1.83 mW | revivals every ≈ 2.07 mm (nL ≈ 1.03 mm) |
 | Amplifiers | BOA1004P **semiconductor** boosters, 88.6 nm gain band, 15.2 dBm saturation | not erbium-fibre amplifiers as the handout describes |
 
 - **Signals are small.** A rough loss budget gives ~5 mV per arm for the FP laser and

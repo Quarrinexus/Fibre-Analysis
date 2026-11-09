@@ -109,6 +109,32 @@ def test_scan_repeats_and_whole_point_undo(tmp_path, monkeypatch):
     assert len(list((tmp_path / "data" / "rep_traces").glob("*.csv"))) == 6  # unique names, none overwritten
 
 
+def test_next_position_steps_without_drift():
+    x = scan.next_position(None, 24.5, -0.1, 0.5)
+    for _ in range(100):
+        x = scan.next_position(x, None, -0.1, 0.5)
+    assert x == 14.5  # exact, not 14.499999999
+    assert scan.next_position(0.5, None, -0.1, 0.5) is None  # past --stop
+    assert scan.next_position(0.6, None, -0.1, 0.5) == 0.5  # --stop itself is included
+    assert scan.next_position(3.0, None, None, None) is None  # no --step: nothing suggested
+
+
+def test_scan_enter_takes_suggested_position(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    use_drivers(monkeypatch, {"ps2000a": FakeNewApi()})
+    # 12.3, 12.2, undo 12.2, 12.2 again, 12.1, 12.0, then past --stop: Enter alone is refused.
+    answers = iter(["", "", "u", "", "", "", "", "q"])
+    monkeypatch.setattr("builtins.input", lambda _="": next(answers))
+    args = ["--out", "step.csv", "--pico", "--unit", "mm", "--no-plot", "--step", "-0.1"]
+    scan.main([*args, "--start", "12.3", "--stop", "12.0"])
+    assert list(scan.load_scan("step.csv").x) == pytest.approx([12.0, 12.1, 12.2, 12.3])
+
+    # Re-run without --start: carries on from the last point; a typed value restarts the steps.
+    answers = iter(["", "5", "", "q"])
+    scan.main(args)
+    assert list(scan.load_scan("step.csv").x) == pytest.approx([4.9, 5.0, 11.9, 12.0, 12.1, 12.2, 12.3])
+
+
 def test_monitor_logs_against_time(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     use_drivers(monkeypatch, {"ps2000a": FakeNewApi()})

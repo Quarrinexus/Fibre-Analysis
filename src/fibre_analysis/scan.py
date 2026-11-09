@@ -18,6 +18,12 @@ Enter and it captures, saves the trace into <out>_traces/ and logs the point.
 Without --watch or --pico you're asked for the trace path each time instead.
 Commands at the prompt: "u" removes the last point, "q" quits.
 Re-running with the same --out file carries on from where you left off.
+
+Stepped scans: give --step (and --start, --stop) and the prompt shows the next
+position; set the micrometer there and press Enter alone to take it. Typing a
+number instead takes that position, and the steps carry on from it.
+
+    uv run fibre-scan --pico --out fp_scan.csv --unit mm --start 24.5 --step -0.1 --stop 0.5
 """
 
 from __future__ import annotations
@@ -213,6 +219,27 @@ class PicoSource:
         self.scope.close()
 
 
+def next_position(prev: float | None, start: float | None, step: float | None, stop: float | None) -> float | None:
+    """Next position of a stepped scan, or None when there is none to suggest.
+
+    With no point taken yet it's ``start``; after that, the last position plus ``step``.
+    Returns None once the next position would pass ``stop``. Rounded so that repeated
+    steps of 0.1 don't drift (12.299999 -> 12.3).
+    """
+    if step is None:
+        return None
+    if prev is None:
+        nxt = start
+    else:
+        nxt = prev + step
+    if nxt is None:
+        return None
+    nxt = round(nxt, 9)
+    if stop is not None and (nxt - stop) * step > 1e-9:
+        return None
+    return nxt
+
+
 def main(argv: list[str] | None = None) -> None:
     utf8_output()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -223,6 +250,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("-c", "--channel", help="detector channel (default: first, or A with --pico)")
     p.add_argument("--dark", type=float, default=0.0, help="detector dark level in V")
     p.add_argument("--no-plot", action="store_true")
+    s_g = p.add_argument_group("stepped scan (press Enter alone to take the suggested position)")
+    s_g.add_argument("--step", type=float, help="change between points, e.g. -0.1 to go down in 0.1 steps")
+    s_g.add_argument("--start", type=float, help="first position (default: carry on from the last point in --out)")
+    s_g.add_argument("--stop", type=float, help="last position; no more suggestions past it")
     g = p.add_argument_group("direct PicoScope capture (--pico)")
     g.add_argument("--pico", action="store_true", help="capture from the PicoScope directly")
     g.add_argument("--family", default="auto", help="driver family, e.g. ps2000a (default: try all)")
@@ -238,6 +269,10 @@ def main(argv: list[str] | None = None) -> None:
     a = p.parse_args(argv)
     if a.pico and a.watch:
         p.error("use either --pico or --watch, not both")
+    if a.step == 0:
+        p.error("--step can't be 0")
+    if (a.start is not None or a.stop is not None) and a.step is None:
+        p.error("--start and --stop need --step")
 
     out = data_path(a.out)
     rows = _read_rows(out)
@@ -281,9 +316,22 @@ def main(argv: list[str] | None = None) -> None:
 
     redraw()
     groups: list[int] = [1] * len(rows)  # captures per Enter press, so "u" undoes a whole point
+    # Stepped scan: a fresh --start wins; otherwise carry on from the last point in the file.
+    if a.start is not None:
+        nxt = next_position(None, a.start, a.step, a.stop)
+    else:
+        nxt = next_position(float(rows[-1]["x"]) if rows else None, None, a.step, a.stop)
+    if a.step is not None and nxt is None and a.start is None and not rows:
+        print("No --start and no earlier points: type the first position; the steps follow from it.")
     try:
         while True:
-            s = input(f"{a.quantity} [{a.unit}] (u = undo, q = quit): ").strip()
+            if nxt is not None:
+                prompt = f"{a.quantity}: set {nxt:g} {a.unit}, then Enter (or type another value, u = undo, q = quit): "
+            elif a.step is not None and (a.start is not None or rows):
+                prompt = f"{a.quantity}: end of range reached (type a value, u = undo, q = quit): "
+            else:
+                prompt = f"{a.quantity} [{a.unit}] (u = undo, q = quit): "
+            s = input(prompt).strip()
             if s.lower() in ("q", "quit", "exit"):
                 break
             if s.lower() == "u":
@@ -294,12 +342,17 @@ def main(argv: list[str] | None = None) -> None:
                     print(f"Removed x = {x_undo} ({n_undo} capture{'s' if n_undo > 1 else ''})")
                     _write_rows(out, rows)
                     redraw()
+                    if a.step is not None:
+                        nxt = float(x_undo)  # take the undone position again next
                 continue
-            try:
-                x = float(s)
-            except ValueError:
-                print("Type a number, u or q")
-                continue
+            if s == "" and nxt is not None:
+                x = nxt
+            else:
+                try:
+                    x = float(s)
+                except ValueError:
+                    print("Type a number, u or q" + (" (or Enter alone for the suggested position)" if nxt else ""))
+                    continue
 
             n_rep = max(a.repeats, 1) if source is not None else 1
             added = 0
@@ -333,6 +386,8 @@ def main(argv: list[str] | None = None) -> None:
                     f"  {path.name}{tag}: C = {row['contrast']} ± {row['contrast_err']} ({row['n_periods']} periods; "
                     f"whole-trace {row['contrast_whole']})"
                 )
+            if added and a.step is not None:
+                nxt = next_position(x, None, a.step, a.stop)
             if added:
                 groups.append(added)
                 if added > 1:

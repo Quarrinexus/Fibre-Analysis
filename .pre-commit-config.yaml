@@ -1,0 +1,21 @@
+# Local hooks that call the globally installed ruff and ty (no copies are installed
+# into the project). Settings come from [tool.ruff] in pyproject.toml.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: ty-check
+        name: ty check
+        entry: ty check
+        language: system
+        types: [python]
+        pass_filenames: false  # type checking needs the whole project, not just changed files

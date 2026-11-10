@@ -119,7 +119,8 @@ def test_scan_with_pico(monkeypatch, tmp_path):
     answers = iter(["0", "0.5", "u", "1", "q"])
     monkeypatch.setattr("builtins.input", lambda _="": next(answers))
     out = tmp_path / "scan.csv"
-    scan.main(["--out", str(out), "--pico", "--record", "B", "--no-plot"])
+    # the fake fringes are too fast for the 6 µs default, so use the old interval
+    scan.main(["--out", str(out), "--pico", "--record", "B", "--no-plot", "--dt", "5e-6"])
     s = scan.load_scan(out)
     assert list(s.x) == [0, 1]
     assert s.contrast == pytest.approx([TRUE_CONTRAST] * 2, abs=0.005)

@@ -167,12 +167,33 @@ def find_data(name: str | Path) -> Path:
     return p
 
 
+def output_section(name: str) -> str:
+    """Which output/ subfolder a graph belongs in, from its data file's name.
+
+    The lab's naming convention already says which handout section a file is for:
+    amp2_* = section 5 (an amplifier in each arm), amp1_* = section 4 (one amplifier),
+    vib* = section 6 (vibrometer), anything containing "_trial" = the trial run.
+    Everything else (FP and SLD scans, fringe counts, checks) is section 3.
+    """
+    stem = Path(name).stem.lower()
+    if "_trial" in stem:
+        return "trial"
+    if stem.startswith("amp2_"):
+        return "section5"
+    if stem.startswith("amp1_"):
+        return "section4"
+    if stem.startswith("vib"):
+        return "section6"
+    return "section3"
+
+
 def graph_path(data_file: str | Path, suffix: str) -> Path:
-    """Where a graph made from `data_file` goes: an output/ folder beside the data
-    (beside data/ itself for files kept in data/)."""
+    """Where a graph made from `data_file` goes: output/<section>/ beside the data
+    (beside data/ itself for files kept in data/). The section comes from
+    `output_section`."""
     data_file = Path(data_file)
     base = data_file.parent.parent if data_file.parent.name == DATA_DIR.name else data_file.parent
-    folder = base / "output"
+    folder = base / "output" / output_section(data_file.name)
     folder.mkdir(parents=True, exist_ok=True)
     return folder / (data_file.stem + suffix)
 

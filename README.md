@@ -111,8 +111,10 @@ Every command has `--help`.
 
 Collected data goes in `data/`: a bare filename such as `--out fp_scan.csv` is saved as
 `data/fp_scan.csv`, and commands look in `data/` for files you name, so `fibre-envelope fp_scan.csv`
-works. Run commands from this folder. Graphs are saved in `output/` (e.g. `output/fp_scan_spectrum.png`).
-`fibre-scan` updates `output/<scan>.png` after every point.
+works. Run commands from this folder. Graphs are saved in `output/<section>/`, the section taken from the
+data file's name: `amp1_*` → `section4/`, `amp2_*` → `section5/`, `vib*` → `section6/`, anything with
+`_trial` → `trial/`, everything else → `section3/` (e.g. `output/section3/fp_scan_main_spectrum.png`).
+`fibre-scan` updates `output/<section>/<scan>.png` after every point.
 
 ## Using in the lab
 

@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--drive-freq", type=float, help="Hz, if no drive channel")
     p.add_argument("--wavelength", type=float, default=setup_a.FP_CENTRE_NM, help="nm (default: FP laser)")
     p.add_argument("--window", type=float, help="STFT window length in s (default: chosen from the fringe rate)")
-    p.add_argument("--plot", help="figure file (default: output/<trace>_vibro.png)")
+    p.add_argument("--plot", help="figure file (default: output/<section>/<trace>_vibro.png)")
     p.add_argument("--show", action="store_true")
     a = p.parse_args(argv)
 

@@ -61,7 +61,7 @@ def test_count_cli_file_and_log(tmp_path, monkeypatch, capsys):
     rows = list(csv.DictReader((tmp_path / "data" / "fringecount.csv").open(encoding="utf-8")))
     assert len(rows) == 2
     assert float(rows[0]["pass_factor"]) == pytest.approx(1.0, rel=0.01)
-    assert (tmp_path / "output" / "rec0.png").exists()
+    assert (tmp_path / "output" / "section3" / "rec0.png").exists()
 
 
 def test_count_cli_drift_run_is_not_averaged(tmp_path, monkeypatch, capsys):
@@ -143,6 +143,6 @@ def test_monitor_logs_against_time(tmp_path, monkeypatch, capsys):
     assert s.unit == "s"
     assert len(s.x) >= 3 and np.all(np.diff(s.x) > 0)
     assert np.allclose(s.contrast, TRUE_CONTRAST, atol=0.01)
-    assert (tmp_path / "output" / "mon.png").exists()
+    assert (tmp_path / "output" / "section3" / "mon.png").exists()
     with pytest.raises(SystemExit):  # refuses to append to an existing run
         scan.monitor_main(["--out", "mon.csv", "--interval", "0.05", "--duration", "0.1"])

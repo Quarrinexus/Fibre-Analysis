@@ -340,7 +340,7 @@ def main(argv: list[str] | None = None) -> None:
         default=0.6 * setup_a.fp_round_trip_um(),
         help="FP: ignore peaks closer than this, µm (default 60%% of the data-sheet 2nL ≈ 1250 µm)",
     )
-    p.add_argument("--plot", help="save the figure to this file (default: output/<scan>_<source>.png)")
+    p.add_argument("--plot", help="save the figure to this file (default: output/<section>/<scan>_<source>.png)")
     p.add_argument("--show", action="store_true", help="open the figure window")
     a = p.parse_args(argv)
 

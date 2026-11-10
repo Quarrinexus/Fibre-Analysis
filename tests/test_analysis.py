@@ -188,7 +188,7 @@ def test_spectrum_cli(demo, tmp_path):
     shutil.copy(demo / "fp_scan.csv", tmp_path / "fp.csv")
     spectrum.main([str(tmp_path / "fp.csv"), "--source", "fp"])
     assert (tmp_path / "fp_spectrum.csv").exists()
-    assert (tmp_path / "output" / "fp_spectrum.png").exists()
+    assert (tmp_path / "output" / "section3" / "fp_spectrum.png").exists()
 
 
 def test_repeated_points_are_averaged(tmp_path):
@@ -243,7 +243,34 @@ def test_data_folder(tmp_path, monkeypatch):
     (tmp_path / "data" / "y.csv").write_text("t,v\n0,1\n1,2\n", encoding="utf-8")
     assert io.find_data("y.csv") == Path("data/y.csv")
     assert io.load_trace("y.csv").channel()[1] == 2
-    assert io.graph_path("data/y.csv", ".png") == Path("output/y.png")
+    assert io.graph_path("data/y.csv", ".png") == Path("output/section3/y.png")
+
+
+@pytest.mark.parametrize(
+    ("name", "section"),
+    [
+        ("fp_scan_main.csv", "section3"),
+        ("sld_scan_main_250mA.csv", "section3"),
+        ("fringecount_main_20261109_104004.csv", "section3"),
+        ("monitor_main_11p30mm.csv", "section3"),
+        ("amp1_fp_both_balance_rev_main.csv", "section4"),
+        ("amp1_sld_scan_main.csv", "section4"),
+        ("amp2_sld_both_main.csv", "section5"),
+        ("vib_main.csv", "section6"),
+        ("vib_trial.csv", "trial"),
+        ("fp_scan_trial_period.csv", "trial"),
+    ],
+)
+def test_output_section_follows_naming_convention(name, section):
+    assert io.output_section(name) == section
+
+
+def test_graph_path_sorts_into_section_folders(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert io.graph_path("data/amp1_x_main.csv", "_sld.png") == Path("output/section4/amp1_x_main_sld.png")
+    assert (tmp_path / "output" / "section4").is_dir()
+    other = tmp_path / "demo" / "fp_scan_trial.csv"  # data outside data/: output/ goes beside it
+    assert io.graph_path(other, ".png") == tmp_path / "demo" / "output" / "trial" / "fp_scan_trial.png"
 
 
 def _fp_trace(n_fringes, duration=20e-3, mod_freq=100.0, **kw):

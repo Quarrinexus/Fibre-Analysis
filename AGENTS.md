@@ -53,10 +53,10 @@ before you call a change done.
 | `src/fibre_analysis/setup_a.py` | data-sheet constants for this setup (defaults and comparisons) |
 | `src/fibre_analysis/synth.py` | fake data shaped like the real setup (`fibre-synth`) |
 | `src/fibre_analysis/datasheets/` | manufacturer spectra traced off the data sheets (FP, SLD); read via `setup_a.datasheet_spectrum` |
-| `tools/digitise_datasheets.py` | re-traces those curves from `../Setup_A_manuals_v2.pdf` (needs `pdftoppm`); writes check images to `output/` |
+| `tools/digitise_datasheets.py` | re-traces those curves from `../Setup_A_manuals_v2.pdf` (needs `pdftoppm`); writes check images to `output/datasheets/` |
 | `tests/fake_pico.py` | fake picosdk drivers used by `tests/test_capture.py` |
 | `data/` | **collected lab data, git-ignored**: scan CSVs, `<scan>_traces/` raw traces |
-| `output/` | graphs, git-ignored |
+| `output/` | graphs, git-ignored, in `section3/`…`section6/`, `trial/`, `datasheets/` (`io.output_section`) |
 | `demo/` | fake data from `fibre-synth`, git-ignored |
 
 ## Rules
@@ -65,8 +65,10 @@ before you call a change done.
   It is irreplaceable lab data. Scan CSVs are append-only; repeated positions are
   averaged by `load_scan`, not overwritten.
 - **Paths:** a bare `--out name.csv` saves to `data/name.csv` (`io.data_path`);
-  readers fall back to `data/` (`io.find_data`); graphs go to `output/`
-  (`io.graph_path`). Use these helpers for any new command.
+  readers fall back to `data/` (`io.find_data`); graphs go to `output/<section>/`
+  (`io.graph_path`), the section chosen from the data file's name by `io.output_section`
+  (`amp1_*` → section4, `amp2_*` → section5, `vib*` → section6, `*_trial*` → trial, else section3).
+  Use these helpers for any new command, and keep that naming convention for new data.
 - **No hardware in tests.** Anything touching the scope goes through
   `capture._load_driver`, which the tests replace with fakes from `tests/fake_pico.py`.
   Code that can't be run against real hardware must be checked against the picosdk

@@ -14,7 +14,7 @@ For each plot:
    short gaps where pen marks cross the curve.
 
 Writes src/fibre_analysis/datasheets/{fp,sld}_spectrum.csv and, for checking by
-eye, output/datasheet_trace_{fp,sld}.png with the trace drawn over the scan.
+eye, output/datasheets/datasheet_trace_{fp,sld}.png with the trace drawn over the scan.
 """
 
 from __future__ import annotations
@@ -167,8 +167,8 @@ def digitise(pdf: Path, plot: Plot, tmp: Path) -> np.ndarray:
     ax.set_axis_off()
     ax.legend(loc="upper right")
     fig.tight_layout()
-    check = ROOT / "output" / f"datasheet_trace_{plot.name}.png"
-    check.parent.mkdir(exist_ok=True)
+    check = ROOT / "output" / "datasheets" / f"datasheet_trace_{plot.name}.png"
+    check.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(check)
     plt.close(fig)
     return data

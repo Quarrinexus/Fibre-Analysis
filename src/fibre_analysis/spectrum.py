@@ -18,7 +18,7 @@ Limits, printed for each run:
 Only |FT| is measured (no phase), so the result is symmetric about λ0: it
 shows the width and the mode spacing, not lopsidedness.
 
-Writes <scan>_spectrum.csv (wavelength_nm, intensity) and output/<scan>_spectrum.png
+Writes <scan>_spectrum.csv (wavelength_nm, intensity) and output/<section>/<scan>_spectrum.png
 with the manufacturer spectrum (traced off the data sheet) overlaid. The
 reconstruction's absolute wavelengths rest on the assumed centre wavelength, so
 compare spacings and widths, not exact positions.

@@ -1,10 +1,12 @@
-"""Redraw the section 3-4 report figures in the paper style (same data and analysis as the commands that made them).
+"""Redraw the section 3 (Mach-Zehnder) report figures in the paper style (same data and analysis as the commands
+that made them).
 
 Run from fibre_analysis/:
-    uv run python tools/report_figures.py
+    uv run python tools/section3_figures.py
 
-Writes ../figures/fig02, fig03, fig04, fig06, fig07, fig08 and fig09 (main run). Figures 05 and 10-13 were already
-made in this style, and fig01 is a drawing. The style itself lives in tools/section6_figures.py (paper_style), so
+Writes ../figures/fig02, fig03, fig04, fig06, fig07 and fig08 (main run). Fig05 was already made in this style,
+fig01 is a drawing, and the section 4 figure fig09 is in tools/section4_figures.py, which reuses the plotting
+helpers here. The style itself lives in tools/section6_figures.py (paper_style), so
 all report figures share it. Prints the fitted numbers so they can be checked against REPORT.md.
 """
 
@@ -198,7 +200,6 @@ def main() -> None:
     fig06_contrast_vs_time()
     _sld_fig("sld_scan_main.csv", "fig07_sld_envelope.png")
     _spectrum_fig("sld_scan_main.csv", "sld", "fig08_sld_spectrum.png", "650 mA")
-    _sld_fig("amp1_sld_scan_main.csv", "fig09_sld_envelope_with_amplifier.png")
 
 
 if __name__ == "__main__":

@@ -25,8 +25,8 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 **2. Get the code:**
 
 ```bash
-git clone https://github.com/Quarrinexus/fibre_analysis.git
-cd fibre_analysis
+git clone https://github.com/Quarrinexus/Fibre-Analysis.git
+cd Fibre-Analysis
 ```
 
 **3. Install the Python packages.** For analysis only:

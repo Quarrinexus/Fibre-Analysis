@@ -5,8 +5,9 @@ Run from fibre_analysis/:
     uv run python tools/section3_figures.py
 
 Writes ../figures/fig02, fig03, fig04, fig06, fig07 and fig08 (main run). Fig05 was already made in this style,
-fig01 is a drawing, and the section 4 figure fig09 is in tools/section4_figures.py, which reuses the plotting
-helpers here. The style itself lives in tools/section6_figures.py (paper_style), so
+fig01/fig01b are apparatus diagrams from tools/apparatus_figures.py, and the section 4 figure fig09 is in
+tools/section4_figures.py, which reuses the plotting helpers here.
+The style itself lives in tools/section6_figures.py (paper_style), so
 all report figures share it. Prints the fitted numbers so they can be checked against REPORT.md.
 """
 

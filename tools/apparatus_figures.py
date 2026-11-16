@@ -29,17 +29,18 @@ ELEC: dict[str, Any] = dict(color="0.35", lw=0.9, ls=(0, (3, 2)), zorder=1)
 FS = 8  # label font size (pt) at the final 7 in width
 
 # Setup A, per arm, in order from the splitter. Common to every configuration:
-# air gap (delay line) -> [phase modulator, arm 2 only] -> polariser. The one phase
-# modulator is driven by the function generator (drawn below it).
-ARM1 = ["gap", None, "pol"]
-ARM2 = ["gap", "pm", "pol"]
+# air gap (delay line) -> [phase modulator, arm 2 only]. The one phase modulator is
+# driven by the function generator (drawn below it). The single polariser is not in
+# an arm: it sits after the combiner (drawn in setup_a_panel).
+ARM1 = ["gap", None]
+ARM2 = ["gap", "pm"]
 CONFIGS = [
     ("(a)", "Section 3: plain interferometer", [None, *ARM1], [None, *ARM2]),
     ("(b)", "Section 4: amplifier in one arm", ["ext", *ARM1], ["amp1", *ARM2]),
     ("(c)", "Section 5: amplifier in each arm", ["amp2", *ARM1], ["amp1", *ARM2]),
 ]
 # x positions of the component slots along each arm
-SLOT_X = [5.0, 7.6, 10.0, 12.1]
+SLOT_X = [5.0, 7.6, 10.0]
 
 
 def style() -> None:
@@ -61,6 +62,12 @@ def lens_pair(ax, x, y, half=0.42):
     ax.plot([x - half, x + half], [y, y], **BEAM)
     lens(ax, x - half, y)
     lens(ax, x + half, y)
+
+
+def polariser(ax, x, y):
+    box(ax, x, y, 0.62, 0.56)
+    for dx in (-0.14, 0.0, 0.14):
+        ax.plot([x + dx, x + dx], [y - 0.19, y + 0.19], color="black", lw=0.9, zorder=4)
 
 
 def label(ax, x, y, side, text):
@@ -105,12 +112,6 @@ def draw_component(ax, name, x, y, side, gap_name):
         box(ax, x, gy, 1.75, 0.78, "Function\ngenerator", fs=FS - 0.5)
         ax.plot([x, x], [y + side * 0.28, gy - side * 0.39], **ELEC)
         return 0.53
-    if name == "pol":
-        box(ax, x, y, 0.62, 0.56)
-        for dx in (-0.14, 0.0, 0.14):
-            ax.plot([x + dx, x + dx], [y - 0.19, y + 0.19], color="black", lw=0.9, zorder=4)
-        label(ax, x, y, side, "Polariser")
-        return 0.31
     if name in ("amp1", "amp2"):
         box(ax, x, y, 1.15, 0.62)
         ax.add_patch(
@@ -137,22 +138,25 @@ def draw_component(ax, name, x, y, side, gap_name):
 
 def setup_a_panel(ax, letter, title, arm1, arm2):
     y1, y2 = 1.3, -1.3
-    # source, splitter, combiner, attenuator, detector
+    # source, splitter, combiner, polariser, attenuator, detector
     box(ax, 0.85, 0, 1.5, 0.75, "FP/SLD")
     box(ax, 2.55, 0, 0.85, 0.5, "50:50", fs=FS - 1)
-    box(ax, 14.25, 0, 0.85, 0.5, "50:50", fs=FS - 1)
-    box(ax, 15.75, 0, 0.5, 0.32)
-    ax.text(15.75, -0.38, "Attenuator", ha="center", va="top", fontsize=FS)
-    box(ax, 17.3, 0, 1.5, 0.75, "Detector")
+    box(ax, 12.25, 0, 0.85, 0.5, "50:50", fs=FS - 1)
+    polariser(ax, 13.45, 0)
+    ax.text(13.45, 0.36, "Polariser", ha="center", va="bottom", fontsize=FS)
+    box(ax, 14.75, 0, 0.5, 0.32)
+    ax.text(14.75, -0.38, "Attenuator", ha="center", va="top", fontsize=FS)
+    box(ax, 16.3, 0, 1.5, 0.75, "Detector")
     ax.plot([1.6, 2.12], [0, 0], **FIBRE)
-    ax.plot([14.68, 15.5], [0, 0], **FIBRE)
-    ax.plot([16.0, 16.55], [0, 0], **FIBRE)
+    ax.plot([12.68, 13.14], [0, 0], **FIBRE)
+    ax.plot([13.76, 14.5], [0, 0], **FIBRE)
+    ax.plot([15.0, 15.55], [0, 0], **FIBRE)
 
     for y, side, comps, gap in ((y1, 1, arm1, "M1"), (y2, -1, arm2, "M2")):
         sgn = 1 if y > 0 else -1
         # fibre fan-out from the splitter and fan-in to the combiner
         ax.plot([2.97, 3.3, 3.75], [sgn * 0.12, y, y], **FIBRE)
-        ax.plot([13.0, 13.45, 13.83], [y, y, sgn * 0.12], **FIBRE)
+        ax.plot([11.0, 11.45, 11.83], [y, y, sgn * 0.12], **FIBRE)
         # straight fibre along the arm; components are drawn over it
         x_last = 3.75
         for name, x in zip(comps, SLOT_X, strict=True):
@@ -161,7 +165,7 @@ def setup_a_panel(ax, letter, title, arm1, arm2):
                 continue
             ax.plot([x_last, x - hw], [y, y], **FIBRE)
             x_last = x + hw
-        ax.plot([x_last, 13.0], [y, y], **FIBRE)
+        ax.plot([x_last, 11.0], [y, y], **FIBRE)
         ax.text(
             3.15,
             y + side * 0.3,
@@ -187,11 +191,11 @@ def setup_a_figure():
     fig, axes = plt.subplots(3, 1, figsize=(7, 6.8))
     for ax, cfg in zip(axes, CONFIGS, strict=True):
         setup_a_panel(ax, *cfg)
-        ax.set_xlim(-0.2, 18.15)
+        ax.set_xlim(-0.2, 17.15)
         ax.set_ylim(-3.25, 2.8)
         ax.set_aspect("equal")
         ax.axis("off")
-    legend(axes[0], 9.0, 2.55)
+    legend(axes[0], 8.0, 2.55)
     fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.02, hspace=0.05)
     return fig
 

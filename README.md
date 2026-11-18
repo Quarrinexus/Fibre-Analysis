@@ -29,20 +29,14 @@ git clone https://github.com/Quarrinexus/Fibre-Analysis.git
 cd Fibre-Analysis
 ```
 
-**3. Install the Python packages.** For analysis only:
+**3. Install the Python packages:**
 
 ```bash
 uv sync
 ```
 
-To also capture from the PicoScope (`--pico`, `fibre-capture`):
-
-```bash
-uv sync --extra pico
-```
-
-Once you've added `--extra pico`, keep using it: a later plain `uv sync` removes the
-Pico package again. `uv run …` never removes anything.
+The PicoScope wrapper package (`picosdk`, used by `--pico` and `fibre-capture`) is a
+normal dependency, so `uv sync` installs it.
 
 **4. Install Pico's drivers** (only for `--pico` / `fibre-capture`). The Python
 package is only a wrapper; the drivers come from Pico Technology. The 2205A in this
@@ -155,7 +149,7 @@ slower motion but blurs the velocity changes in time.
 ## Direct PicoScope capture (optional)
 
 The scripts can drive the scope themselves, so you don't need to save from the
-PicoScope app. This needs Pico's drivers and `uv sync --extra pico` (see
+PicoScope app. This needs Pico's drivers (see
 [Installation](#installation), steps 3–4), and the PicoScope app **closed**, because
 only one program can use the scope at a time.
 
